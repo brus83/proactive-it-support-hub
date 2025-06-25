@@ -48,7 +48,16 @@ const Dashboard = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTickets(data || []);
+      
+      // Type assertion to handle the Supabase query result
+      const typedData = data as any[];
+      const validTickets: DatabaseTicket[] = typedData?.map(ticket => ({
+        ...ticket,
+        categories: ticket.categories || null,
+        profiles: ticket.profiles || null
+      })) || [];
+      
+      setTickets(validTickets);
     } catch (error) {
       console.error('Error fetching tickets:', error);
     } finally {
