@@ -11,7 +11,7 @@ import TicketCard from "@/components/TicketCard";
 import CreateTicketDialog from "@/components/CreateTicketDialog";
 import AIKeySetup from "@/components/AIKeySetup";
 
-interface Ticket {
+interface DatabaseTicket {
   id: string;
   title: string;
   description: string;
@@ -31,7 +31,7 @@ interface Ticket {
 
 const Dashboard = () => {
   const { user, profile, signOut } = useAuth();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tickets, setTickets] = useState<DatabaseTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -87,6 +87,19 @@ const Dashboard = () => {
       default: return 'Utente';
     }
   };
+
+  // Convert database ticket to TicketCard format
+  const convertToTicketCardFormat = (dbTicket: DatabaseTicket) => ({
+    id: dbTicket.id,
+    title: dbTicket.title,
+    description: dbTicket.description,
+    status: dbTicket.status as "pending" | "in_progress" | "resolved",
+    priority: dbTicket.priority as "low" | "medium" | "high",
+    category: dbTicket.categories?.name || 'Non categorizzato',
+    createdAt: new Date(dbTicket.created_at),
+    updatedAt: new Date(dbTicket.updated_at),
+    assignedTo: dbTicket.profiles?.full_name
+  });
 
   if (loading) {
     return (
@@ -217,7 +230,7 @@ const Dashboard = () => {
                 </div>
               ) : (
                 tickets.map((ticket) => (
-                  <TicketCard key={ticket.id} ticket={ticket} />
+                  <TicketCard key={ticket.id} ticket={convertToTicketCardFormat(ticket)} />
                 ))
               )}
             </div>
@@ -228,7 +241,6 @@ const Dashboard = () => {
         <CreateTicketDialog 
           isOpen={isCreateDialogOpen}
           onClose={() => setIsCreateDialogOpen(false)}
-          onTicketCreated={fetchTickets}
         />
       </div>
     </div>

@@ -13,14 +13,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { Lightbulb, Upload, Brain, Zap, Clock, Target } from "lucide-react";
 import { aiService, type TicketAnalysis } from "@/services/aiService";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import AIKeySetup from "./AIKeySetup";
 
 interface CreateTicketDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  onTicketCreated?: () => void;
 }
 
-const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
+const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDialogProps) => {
+  const { user } = useAuth();
+  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -33,6 +38,28 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [showAIResults, setShowAIResults] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+        
+        if (error) throw error;
+        setCategories(data || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+
+    if (isOpen) {
+      fetchCategories();
+    }
+  }, [isOpen]);
 
   // Debounce per analisi automatica
   useEffect(() => {
@@ -40,7 +67,7 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
       if (formData.title.length > 5 && formData.description.length > 10) {
         analyzeTicketWithAI();
       }
-    }, 2000); // Analizza dopo 2 secondi di inattività
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [formData.title, formData.description]);
@@ -83,7 +110,7 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.title || !formData.description || !formData.category) {
@@ -95,31 +122,67 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
       return;
     }
 
-    // Simulazione invio ticket con dati AI
-    const ticketData = {
-      ...formData,
-      aiAnalysis,
-      estimatedResolution: aiAnalysis?.estimatedResolutionTime,
-      isUrgent: aiAnalysis?.isUrgent
-    };
+    if (!user) {
+      toast({
+        title: "Errore",
+        description: "Devi essere autenticato per creare un ticket",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    toast({
-      title: "Ticket Creato con Successo! 🎉",
-      description: `Il tuo ticket "${formData.title}" è stato analizzato dall'AI e assegnato automaticamente.`,
-    });
-    
-    onClose();
-    
-    // Reset form
-    setFormData({
-      title: "",
-      description: "",
-      category: "",
-      priority: "medium",
-      urgency: ""
-    });
-    setAiAnalysis(null);
-    setShowAIResults(false);
+    setIsSubmitting(true);
+
+    try {
+      // Create ticket in Supabase
+      const { data, error } = await supabase
+        .from('tickets')
+        .insert({
+          title: formData.title,
+          description: formData.description,
+          priority: formData.priority as any,
+          category_id: formData.category,
+          user_id: user.id,
+          ai_analysis: aiAnalysis
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Creato con Successo! 🎉",
+        description: `Il tuo ticket "${formData.title}" è stato creato e assegnato automaticamente.`,
+      });
+      
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        category: "",
+        priority: "medium",
+        urgency: ""
+      });
+      setAiAnalysis(null);
+      setShowAIResults(false);
+      
+      // Call the callback if provided
+      if (onTicketCreated) {
+        onTicketCreated();
+      }
+      
+      onClose();
+      
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast({
+        title: "Errore",
+        description: "Errore nella creazione del ticket. Riprova più tardi.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -179,12 +242,11 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
                       <SelectValue placeholder="Seleziona una categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hardware">Hardware</SelectItem>
-                      <SelectItem value="software">Software</SelectItem>
-                      <SelectItem value="network">Rete/Connessione</SelectItem>
-                      <SelectItem value="access">Accessi/Password</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="other">Altro</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -320,9 +382,9 @@ const CreateTicketDialog = ({ isOpen, onClose }: CreateTicketDialogProps) => {
               <Button type="button" variant="outline" onClick={onClose}>
                 Annulla
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
                 <Brain className="w-4 h-4 mr-2" />
-                Crea Ticket AI
+                {isSubmitting ? 'Creando...' : 'Crea Ticket AI'}
               </Button>
             </div>
           </form>
