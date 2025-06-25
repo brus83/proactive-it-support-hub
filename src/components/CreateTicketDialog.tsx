@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -134,6 +133,9 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
     setIsSubmitting(true);
 
     try {
+      // Convert aiAnalysis to JSON for database storage
+      const aiAnalysisJson = aiAnalysis ? JSON.parse(JSON.stringify(aiAnalysis)) : null;
+
       // Create ticket in Supabase
       const { data, error } = await supabase
         .from('tickets')
@@ -143,7 +145,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
           priority: formData.priority as any,
           category_id: formData.category,
           user_id: user.id,
-          ai_analysis: aiAnalysis
+          ai_analysis: aiAnalysisJson
         })
         .select()
         .single();

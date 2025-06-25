@@ -23,10 +23,10 @@ interface DatabaseTicket {
   categories?: {
     name: string;
     color: string;
-  };
+  } | null;
   profiles?: {
     full_name: string;
-  };
+  } | null;
 }
 
 const Dashboard = () => {
@@ -93,13 +93,19 @@ const Dashboard = () => {
     id: dbTicket.id,
     title: dbTicket.title,
     description: dbTicket.description,
-    status: dbTicket.status as "pending" | "in_progress" | "resolved",
+    status: dbTicket.status === 'open' ? 'pending' as const : 
+            dbTicket.status === 'in_progress' ? 'in_progress' as const : 
+            'resolved' as const,
     priority: dbTicket.priority as "low" | "medium" | "high",
     category: dbTicket.categories?.name || 'Non categorizzato',
     createdAt: new Date(dbTicket.created_at),
     updatedAt: new Date(dbTicket.updated_at),
-    assignedTo: dbTicket.profiles?.full_name
+    assignedTo: dbTicket.profiles?.full_name || undefined
   });
+
+  const handleTicketCreated = async () => {
+    await fetchTickets();
+  };
 
   if (loading) {
     return (
@@ -241,6 +247,7 @@ const Dashboard = () => {
         <CreateTicketDialog 
           isOpen={isCreateDialogOpen}
           onClose={() => setIsCreateDialogOpen(false)}
+          onTicketCreated={handleTicketCreated}
         />
       </div>
     </div>
