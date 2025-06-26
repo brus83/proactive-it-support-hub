@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import { Link } from "react-router-dom";
 import TicketCard from "@/components/TicketCard";
 import CreateTicketDialog from "@/components/CreateTicketDialog";
 import AIKeySetup from "@/components/AIKeySetup";
+import { aiService } from "@/services/aiService";
 
 interface DatabaseTicket {
   id: string;
@@ -36,6 +36,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [currentProvider, setCurrentProvider] = useState<'openai' | 'huggingface' | 'heuristic'>('heuristic');
 
   const fetchTickets = async () => {
     try {
@@ -80,6 +81,12 @@ const Dashboard = () => {
   const handleApiKeySet = (apiKey: string) => {
     localStorage.setItem('openai_api_key', apiKey);
     setHasApiKey(true);
+    setCurrentProvider('openai');
+  };
+
+  const handleProviderChange = (provider: 'openai' | 'huggingface' | 'heuristic') => {
+    setCurrentProvider(provider);
+    aiService.setProvider(provider);
   };
 
   const getRoleColor = (role: string) => {
@@ -182,7 +189,9 @@ const Dashboard = () => {
         {/* AI Setup */}
         <AIKeySetup 
           onApiKeySet={handleApiKeySet}
+          onProviderChange={handleProviderChange}
           hasApiKey={hasApiKey || !!localStorage.getItem('openai_api_key')}
+          currentProvider={currentProvider}
         />
 
         {/* Statistiche Overview */}

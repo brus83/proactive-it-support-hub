@@ -1,4 +1,3 @@
-
 interface TicketAnalysis {
   category: string;
   priority: 'low' | 'medium' | 'high';
@@ -15,20 +14,47 @@ interface TicketAnalysis {
 
 interface AIServiceConfig {
   apiKey?: string;
+  provider?: 'openai' | 'huggingface' | 'heuristic';
 }
 
 class AIService {
   private apiKey: string | null = null;
+  private provider: 'openai' | 'huggingface' | 'heuristic' = 'heuristic';
 
   constructor(config?: AIServiceConfig) {
     this.apiKey = config?.apiKey || null;
+    this.provider = config?.provider || 'heuristic';
   }
 
   setApiKey(apiKey: string) {
     this.apiKey = apiKey;
+    this.provider = 'openai';
+  }
+
+  setProvider(provider: 'openai' | 'huggingface' | 'heuristic') {
+    this.provider = provider;
   }
 
   async analyzeTicket(title: string, description: string): Promise<TicketAnalysis> {
+    console.log(`Analizzando ticket con provider: ${this.provider}`);
+    
+    switch (this.provider) {
+      case 'openai':
+        if (!this.apiKey) {
+          console.log('OpenAI API key non disponibile, usando fallback');
+          return this.analyzeWithHeuristics(title, description);
+        }
+        return this.analyzeWithOpenAI(title, description);
+      
+      case 'huggingface':
+        return this.analyzeWithHuggingFace(title, description);
+      
+      default:
+        return this.analyzeWithHeuristics(title, description);
+    }
+  }
+
+  private async analyzeWithOpenAI(title: string, description: string): Promise<TicketAnalysis> {
     if (!this.apiKey) {
       // Fallback a logica euristica migliorata
       return this.analyzeWithHeuristics(title, description);
@@ -110,6 +136,28 @@ Considera:
     } catch (error) {
       console.error('AI Analysis error:', error);
       // Fallback a analisi euristica
+      return this.analyzeWithHeuristics(title, description);
+    }
+  }
+
+  private async analyzeWithHuggingFace(title: string, description: string): Promise<TicketAnalysis> {
+    try {
+      const { huggingFaceAI } = await import('./huggingFaceAI');
+      await huggingFaceAI.initialize();
+      const analysis = await huggingFaceAI.analyzeTicket(title, description);
+      
+      // Converti il formato di HuggingFace al formato standard
+      return {
+        category: analysis.category,
+        priority: analysis.priority,
+        urgency: analysis.urgency,
+        suggestedSolutions: analysis.suggestedSolutions,
+        estimatedResolutionTime: analysis.estimatedResolutionTime,
+        keywords: analysis.keywords,
+        isUrgent: analysis.isUrgent
+      };
+    } catch (error) {
+      console.error('Hugging Face AI error:', error);
       return this.analyzeWithHeuristics(title, description);
     }
   }

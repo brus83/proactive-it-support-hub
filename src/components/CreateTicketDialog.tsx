@@ -36,6 +36,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
   const [aiAnalysis, setAiAnalysis] = useState<TicketAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [currentProvider, setCurrentProvider] = useState<'openai' | 'huggingface' | 'heuristic'>('heuristic');
   const [showAIResults, setShowAIResults] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -97,6 +98,15 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
   const handleApiKeySet = (apiKey: string) => {
     aiService.setApiKey(apiKey);
     setHasApiKey(true);
+    setCurrentProvider('openai');
+    if (formData.title && formData.description) {
+      analyzeTicketWithAI();
+    }
+  };
+
+  const handleProviderChange = (provider: 'openai' | 'huggingface' | 'heuristic') => {
+    aiService.setProvider(provider);
+    setCurrentProvider(provider);
     if (formData.title && formData.description) {
       analyzeTicketWithAI();
     }
@@ -201,8 +211,13 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Setup AI Key */}
-          <AIKeySetup onApiKeySet={handleApiKeySet} hasApiKey={hasApiKey} />
+          {/* Setup AI */}
+          <AIKeySetup 
+            onApiKeySet={handleApiKeySet} 
+            onProviderChange={handleProviderChange}
+            hasApiKey={hasApiKey} 
+            currentProvider={currentProvider}
+          />
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
