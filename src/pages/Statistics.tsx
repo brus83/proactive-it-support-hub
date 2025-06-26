@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,7 +131,7 @@ const Statistics = () => {
     if (!stats) return;
 
     try {
-      // Fetch detailed ticket data for export
+      // Fetch detailed ticket data for export with explicit relationship hints
       const { data: tickets, error } = await supabase
         .from('tickets')
         .select(`
@@ -144,7 +143,8 @@ const Statistics = () => {
           updated_at,
           resolved_at,
           categories (name),
-          profiles (full_name)
+          assigned_user:profiles!tickets_assigned_to_fkey (full_name),
+          creator_user:profiles!tickets_user_id_fkey (full_name)
         `);
 
       if (error) throw error;
@@ -156,7 +156,8 @@ const Statistics = () => {
         'Stato': ticket.status,
         'Priorità': ticket.priority,
         'Categoria': ticket.categories?.name || 'Non categorizzato',
-        'Assegnato a': ticket.profiles?.full_name || 'Non assegnato',
+        'Assegnato a': ticket.assigned_user?.full_name || 'Non assegnato',
+        'Creato da': ticket.creator_user?.full_name || 'Sconosciuto',
         'Data Creazione': new Date(ticket.created_at).toLocaleDateString('it-IT'),
         'Ultimo Aggiornamento': new Date(ticket.updated_at).toLocaleDateString('it-IT'),
         'Data Risoluzione': ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleDateString('it-IT') : 'Non risolto'
