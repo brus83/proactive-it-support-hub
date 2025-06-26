@@ -1,12 +1,12 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Upload, Download } from "lucide-react";
+import { ArrowLeft, Upload, Download, FileUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import FileUploader from "@/components/FileUploader";
 
 interface HistoricalTicket {
   contact_name: string;
@@ -25,6 +25,8 @@ interface HistoricalTicket {
 const ImportData = () => {
   const { profile } = useAuth();
   const [importing, setImporting] = useState(false);
+  const [uploadedData, setUploadedData] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'predefined' | 'upload'>('predefined');
 
   // Dati storici forniti dall'utente
   const historicalData: HistoricalTicket[] = [
@@ -230,7 +232,23 @@ const ImportData = () => {
     }
   };
 
-  const importHistoricalData = async () => {
+  const mapUploadedData = (data: any[]): HistoricalTicket[] => {
+    return data.map(item => ({
+      contact_name: item["Nome contatto"] || item["contact_name"] || item["Nome"] || "",
+      ticket_id: item["ID Ticket"] || item["ticket_id"] || item["ID"] || "",
+      title: item["Oggetto"] || item["title"] || item["Titolo"] || "",
+      owner: item["Proprietario Ticket"] || item["owner"] || item["Proprietario"] || "",
+      status: item["Stato (Ticket)"] || item["Stato"] || item["status"] || "",
+      priority: item["Priorità (Ticket)"] || item["Priorità"] || item["priority"] || "",
+      channel: item["Canale"] || item["channel"] || "",
+      created_at: item["Ora di creazione (Ticket)"] || item["created_at"] || item["Creazione"] || "",
+      closed_at: item["Ora di chiusura Ticket"] || item["closed_at"] || item["Chiusura"] || "",
+      ticket_type: item["Tipologia"] || item["ticket_type"] || item["Tipo"] || "",
+      department: item["Dipartimento"] || item["department"] || ""
+    }));
+  };
+
+  const importData = async (dataToImport: HistoricalTicket[]) => {
     if (!profile?.id) {
       toast.error("Errore: utente non autenticato");
       return;
@@ -260,13 +278,13 @@ const ImportData = () => {
       }
 
       // Prepara i dati per l'inserimento
-      const ticketsToInsert = historicalData.map(item => ({
+      const ticketsToInsert = dataToImport.map(item => ({
         title: item.title,
         description: `Ticket importato da dati storici. Tipo: ${item.ticket_type}`,
         status: mapStatus(item.status),
         priority: mapPriority(item.priority),
         category_id: categoryId,
-        user_id: profile.id, // Usa l'utente corrente come creatore
+        user_id: profile.id,
         contact_name: item.contact_name,
         owner: item.owner,
         channel: item.channel,
@@ -278,14 +296,18 @@ const ImportData = () => {
         resolved_at: item.status === 'CHIUSO' ? parseDate(item.closed_at)?.toISOString() : null
       }));
 
-      // Inserisci i dati
       const { error } = await supabase
         .from('tickets')
         .insert(ticketsToInsert);
 
       if (error) throw error;
 
-      toast.success(`Importati con successo ${ticketsToInsert.length} ticket storici!`);
+      toast.success(`Importati con successo ${ticketsToInsert.length} ticket!`);
+      
+      // Reset uploaded data after successful import
+      if (activeTab === 'upload') {
+        setUploadedData([]);
+      }
       
     } catch (error) {
       console.error('Errore durante l\'importazione:', error);
@@ -293,6 +315,13 @@ const ImportData = () => {
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleFileDataParsed = (data: any[]) => {
+    const mappedData = mapUploadedData(data);
+    setUploadedData(mappedData);
+    setActiveTab('upload');
+    toast.success(`Dati caricati: ${mappedData.length} ticket pronti per l'importazione`);
   };
 
   if (profile?.role !== 'admin') {
@@ -312,6 +341,8 @@ const ImportData = () => {
     );
   }
 
+  const currentData = activeTab === 'predefined' ? historicalData : uploadedData;
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -325,39 +356,65 @@ const ImportData = () => {
           </Link>
           <div>
             <h1 className="text-3xl font-bold">Importazione Dati Storici</h1>
-            <p className="text-muted-foreground">Importa ticket da dati storici esistenti</p>
+            <p className="text-muted-foreground">Importa ticket da dati storici esistenti o carica nuovi file</p>
           </div>
         </div>
 
-        {/* Import Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5" />
-              Importa Ticket Storici
-            </CardTitle>
-            <CardDescription>
-              Sono stati trovati {historicalData.length} ticket da importare dai dati storici forniti.
-              Questi ticket verranno inseriti nel sistema con le informazioni disponibili.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-muted p-4 rounded-lg">
-              <h3 className="font-semibold mb-2">Anteprima dati:</h3>
-              <div className="space-y-2 text-sm">
-                <div>• Ticket da {historicalData[0].created_at} a {historicalData[historicalData.length - 1].created_at}</div>
-                <div>• Proprietari: Supporto Fati, Thomas Tridello, Matteo Martignetti, Roberto Bruno</div>
-                <div>• Canali: Email, Phone</div>
-                <div>• Stati: CHIUSO, IN GESTIONE</div>
-                <div>• Dipartimenti: Supporto IT - Da Gestire, Supporto IT - Sede, Supporto IT - Retail</div>
-              </div>
-            </div>
+        {/* Tab Selector */}
+        <div className="flex gap-2">
+          <Button
+            variant={activeTab === 'predefined' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('predefined')}
+          >
+            Dati Predefiniti
+          </Button>
+          <Button
+            variant={activeTab === 'upload' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('upload')}
+          >
+            <FileUp className="w-4 h-4 mr-2" />
+            Carica File
+          </Button>
+        </div>
 
-            <div className="flex gap-4">
+        {/* File Uploader */}
+        {activeTab === 'upload' && (
+          <FileUploader onDataParsed={handleFileDataParsed} />
+        )}
+
+        {/* Import Card */}
+        {currentData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                {activeTab === 'predefined' ? 'Importa Ticket Storici Predefiniti' : 'Importa Dati Caricati'}
+              </CardTitle>
+              <CardDescription>
+                {activeTab === 'predefined' 
+                  ? `Sono stati trovati ${currentData.length} ticket da importare dai dati storici forniti.`
+                  : `Sono stati caricati ${currentData.length} ticket dal file. Controlla i dati e procedi con l'importazione.`
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">Anteprima dati:</h3>
+                <div className="space-y-2 text-sm">
+                  <div>• Numero ticket: {currentData.length}</div>
+                  {currentData.length > 0 && (
+                    <>
+                      <div>• Primo ticket: {currentData[0].created_at}</div>
+                      <div>• Ultimo ticket: {currentData[currentData.length - 1].created_at}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
               <Button 
-                onClick={importHistoricalData}
+                onClick={() => importData(currentData)}
                 disabled={importing}
-                className="flex-1"
+                className="w-full"
               >
                 {importing ? (
                   <>
@@ -367,58 +424,60 @@ const ImportData = () => {
                 ) : (
                   <>
                     <Download className="w-4 h-4 mr-2" />
-                    Importa {historicalData.length} Ticket
+                    Importa {currentData.length} Ticket
                   </>
                 )}
               </Button>
-            </div>
 
-            <div className="text-sm text-muted-foreground">
-              <p>
-                <strong>Nota:</strong> I ticket importati saranno associati al tuo account utente. 
-                Le date e le informazioni verranno preserve come da dati originali.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="text-sm text-muted-foreground">
+                <p>
+                  <strong>Nota:</strong> I ticket importati saranno associati al tuo account utente. 
+                  Le date e le informazioni verranno preserve come da dati originali.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Preview Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Anteprima Dati da Importare</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Contatto</th>
-                    <th className="text-left p-2">Titolo</th>
-                    <th className="text-left p-2">Proprietario</th>
-                    <th className="text-left p-2">Stato</th>
-                    <th className="text-left p-2">Data Creazione</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historicalData.slice(0, 10).map((ticket, index) => (
-                    <tr key={index} className="border-b">
-                      <td className="p-2">{ticket.contact_name}</td>
-                      <td className="p-2">{ticket.title}</td>
-                      <td className="p-2">{ticket.owner}</td>
-                      <td className="p-2">{ticket.status}</td>
-                      <td className="p-2">{ticket.created_at}</td>
+        {currentData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Anteprima Dati da Importare</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2">Contatto</th>
+                      <th className="text-left p-2">Titolo</th>
+                      <th className="text-left p-2">Proprietario</th>
+                      <th className="text-left p-2">Stato</th>
+                      <th className="text-left p-2">Data Creazione</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {historicalData.length > 10 && (
-                <p className="text-muted-foreground mt-2 text-center">
-                  ... e altri {historicalData.length - 10} ticket
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {currentData.slice(0, 10).map((ticket, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="p-2">{ticket.contact_name}</td>
+                        <td className="p-2">{ticket.title}</td>
+                        <td className="p-2">{ticket.owner}</td>
+                        <td className="p-2">{ticket.status}</td>
+                        <td className="p-2">{ticket.created_at}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {currentData.length > 10 && (
+                  <p className="text-muted-foreground mt-2 text-center">
+                    ... e altri {currentData.length - 10} ticket
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
