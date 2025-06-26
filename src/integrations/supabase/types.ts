@@ -68,13 +68,19 @@ export type Database = {
           ai_analysis: Json | null
           assigned_to: string | null
           category_id: string | null
+          channel: string | null
+          closed_at: string | null
+          contact_name: string | null
           created_at: string | null
+          department: string | null
           description: string
           id: string
+          owner: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes: string | null
           resolved_at: string | null
           status: Database["public"]["Enums"]["ticket_status"]
+          ticket_type: string | null
           title: string
           updated_at: string | null
           user_id: string
@@ -83,13 +89,19 @@ export type Database = {
           ai_analysis?: Json | null
           assigned_to?: string | null
           category_id?: string | null
+          channel?: string | null
+          closed_at?: string | null
+          contact_name?: string | null
           created_at?: string | null
+          department?: string | null
           description: string
           id?: string
+          owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
+          ticket_type?: string | null
           title: string
           updated_at?: string | null
           user_id: string
@@ -98,13 +110,19 @@ export type Database = {
           ai_analysis?: Json | null
           assigned_to?: string | null
           category_id?: string | null
+          channel?: string | null
+          closed_at?: string | null
+          contact_name?: string | null
           created_at?: string | null
+          department?: string | null
           description?: string
           id?: string
+          owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
+          ticket_type?: string | null
           title?: string
           updated_at?: string | null
           user_id?: string
