@@ -2,11 +2,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Clock, CheckCircle, AlertCircle, LogOut, User } from "lucide-react";
+import { Plus, Clock, CheckCircle, AlertCircle, LogOut, User, BarChart3 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
 import TicketCard from "@/components/TicketCard";
 import CreateTicketDialog from "@/components/CreateTicketDialog";
 import AIKeySetup from "@/components/AIKeySetup";
@@ -145,6 +146,13 @@ const Dashboard = () => {
           </div>
           
           <div className="flex items-center gap-4">
+            <Link to="/statistics">
+              <Button variant="outline" size="lg">
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Statistiche
+              </Button>
+            </Link>
+            
             <Button 
               size="lg" 
               onClick={() => setIsCreateDialogOpen(true)}
