@@ -1,3 +1,4 @@
+
 interface TicketAnalysis {
   category: string;
   priority: 'low' | 'medium' | 'high';
@@ -12,132 +13,20 @@ interface TicketAnalysis {
   isUrgent: boolean;
 }
 
-interface AIServiceConfig {
-  apiKey?: string;
-  provider?: 'openai' | 'huggingface' | 'heuristic';
-}
-
 class AIService {
-  private apiKey: string | null = null;
-  private provider: 'openai' | 'huggingface' | 'heuristic' = 'heuristic';
+  private provider: 'huggingface' = 'huggingface';
 
-  constructor(config?: AIServiceConfig) {
-    this.apiKey = config?.apiKey || null;
-    this.provider = config?.provider || 'heuristic';
+  constructor() {
+    this.provider = 'huggingface';
   }
 
-  setApiKey(apiKey: string) {
-    this.apiKey = apiKey;
-    this.provider = 'openai';
-  }
-
-  setProvider(provider: 'openai' | 'huggingface' | 'heuristic') {
+  setProvider(provider: 'huggingface') {
     this.provider = provider;
   }
 
   async analyzeTicket(title: string, description: string): Promise<TicketAnalysis> {
-    console.log(`Analizzando ticket con provider: ${this.provider}`);
-    
-    switch (this.provider) {
-      case 'openai':
-        if (!this.apiKey) {
-          console.log('OpenAI API key non disponibile, usando fallback');
-          return this.analyzeWithHeuristics(title, description);
-        }
-        return this.analyzeWithOpenAI(title, description);
-      
-      case 'huggingface':
-        return this.analyzeWithHuggingFace(title, description);
-      
-      default:
-        return this.analyzeWithHeuristics(title, description);
-    }
-  }
-
-  private async analyzeWithOpenAI(title: string, description: string): Promise<TicketAnalysis> {
-    if (!this.apiKey) {
-      // Fallback a logica euristica migliorata
-      return this.analyzeWithHeuristics(title, description);
-    }
-
-    try {
-      const prompt = `
-Analizza questo ticket IT e fornisci una classificazione dettagliata in formato JSON:
-
-Titolo: "${title}"
-Descrizione: "${description}"
-
-Fornisci la risposta in questo formato JSON esatto:
-{
-  "category": "hardware|software|network|access|email|other",
-  "priority": "low|medium|high",
-  "urgency": "immediate|today|week|month",
-  "suggestedSolutions": [
-    {
-      "title": "Titolo soluzione",
-      "solution": "Descrizione dettagliata della soluzione",
-      "confidence": 0.95
-    }
-  ],
-  "estimatedResolutionTime": "2-4 ore|1-2 giorni|3-5 giorni",
-  "keywords": ["parola1", "parola2"],
-  "isUrgent": true|false
-}
-
-Considera:
-- Hardware: problemi fisici, stampanti, monitor, mouse, tastiera
-- Software: applicazioni, installazioni, licenze, aggiornamenti
-- Network: wifi, internet, connessioni, VPN
-- Access: password, login, permessi, account
-- Email: posta elettronica, outlook, configurazioni email
-- Priorità alta per: sistema non funziona, impossibile lavorare, sicurezza
-- Priorità media per: rallentamenti, funzionalità parziali
-- Priorità bassa per: richieste miglioramenti, domande generali
-`;
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: 'Sei un esperto sistema di analisi per ticket IT. Rispondi sempre e solo in formato JSON valido.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 1000,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
-      
-      if (!content) {
-        throw new Error('No content in OpenAI response');
-      }
-
-      // Parse JSON response
-      const analysis = JSON.parse(content.trim());
-      return analysis;
-
-    } catch (error) {
-      console.error('AI Analysis error:', error);
-      // Fallback a analisi euristica
-      return this.analyzeWithHeuristics(title, description);
-    }
+    console.log(`Analizzando ticket con Hugging Face AI`);
+    return this.analyzeWithHuggingFace(title, description);
   }
 
   private async analyzeWithHuggingFace(title: string, description: string): Promise<TicketAnalysis> {
@@ -146,7 +35,6 @@ Considera:
       await huggingFaceAI.initialize();
       const analysis = await huggingFaceAI.analyzeTicket(title, description);
       
-      // Converti il formato di HuggingFace al formato standard
       return {
         category: analysis.category,
         priority: analysis.priority,
