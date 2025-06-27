@@ -1,399 +1,339 @@
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "@/hooks/use-toast";
-import { Lightbulb, Upload, Brain, Zap, Clock, Target } from "lucide-react";
-import { aiService, type TicketAnalysis } from "@/services/aiService";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import AIKeySetup from "./AIKeySetup";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Lightbulb } from "lucide-react";
+import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
+import { automationService, KnowledgeBase } from "@/services/automationService";
 
 interface CreateTicketDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onTicketCreated?: () => void;
+  onTicketCreated: () => void;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  color: string;
 }
 
 const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDialogProps) => {
-  const { user } = useAuth();
-  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    category: "",
-    priority: "medium",
-    urgency: ""
-  });
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [contactName, setContactName] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [kbSuggestions, setKbSuggestions] = useState<KnowledgeBase[]>([]);
+  const [showKB, setShowKB] = useState(false);
   
-  const [aiAnalysis, setAiAnalysis] = useState<TicketAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentProvider, setCurrentProvider] = useState<'huggingface'>('huggingface');
-  const [showAIResults, setShowAIResults] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
 
-  // Fetch categories on mount
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name');
-        
-        if (error) throw error;
-        setCategories(data || []);
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
-    };
-
     if (isOpen) {
       fetchCategories();
-    }
-  }, [isOpen]);
-
-  // Debounce per analisi automatica
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (formData.title.length > 5 && formData.description.length > 10) {
-        analyzeTicketWithAI();
+      if (profile?.full_name) {
+        setContactName(profile.full_name);
       }
-    }, 2000);
+    }
+  }, [isOpen, profile]);
 
-    return () => clearTimeout(timer);
-  }, [formData.title, formData.description]);
+  // Auto-suggest dalla KB mentre l'utente scrive
+  useEffect(() => {
+    const searchTerm = title + " " + description;
+    if (searchTerm.trim().length > 3) {
+      searchKnowledgeBase(searchTerm.trim());
+    } else {
+      setKbSuggestions([]);
+    }
+  }, [title, description]);
 
-  const analyzeTicketWithAI = async () => {
-    if (!formData.title || !formData.description) return;
-    
-    setIsAnalyzing(true);
+  const searchKnowledgeBase = async (query: string) => {
     try {
-      const analysis = await aiService.analyzeTicket(formData.title, formData.description);
-      setAiAnalysis(analysis);
-      setShowAIResults(true);
-      
-      // Auto-popola i campi suggeriti dall'AI
-      setFormData(prev => ({
-        ...prev,
-        category: prev.category || analysis.category,
-        priority: prev.priority === "medium" ? analysis.priority : prev.priority,
-        urgency: prev.urgency || analysis.urgency
-      }));
+      const suggestions = await automationService.getKBSuggestions(query);
+      setKbSuggestions(suggestions.slice(0, 3));
+      setShowKB(suggestions.length > 0);
     } catch (error) {
-      console.error('Errore analisi AI:', error);
-    } finally {
-      setIsAnalyzing(false);
+      console.error('Errore ricerca KB:', error);
     }
   };
 
-  const handleProviderChange = (provider: 'huggingface') => {
-    aiService.setProvider(provider);
-    setCurrentProvider(provider);
-    if (formData.title && formData.description) {
-      analyzeTicketWithAI();
-    }
-  };
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
 
-  const applySuggestedSolution = (solution: any) => {
-    toast({
-      title: "Soluzione Suggerita Applicata",
-      description: `Prova: ${solution.title}`,
-    });
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Errore caricamento categorie:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.title || !formData.description || !formData.category) {
-      toast({
-        title: "Errore",
-        description: "Compila tutti i campi obbligatori",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!user || !title.trim() || !description.trim()) return;
 
-    if (!user) {
-      toast({
-        title: "Errore",
-        description: "Devi essere autenticato per creare un ticket",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
+    setLoading(true);
     try {
-      // Convert aiAnalysis to JSON for database storage
-      const aiAnalysisJson = aiAnalysis ? JSON.parse(JSON.stringify(aiAnalysis)) : null;
+      const ticketData = {
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        category_id: categoryId || null,
+        contact_name: contactName || profile?.full_name || user.email,
+        user_id: user.id,
+        status: 'open' as const,
+        kb_suggestions: kbSuggestions.map(kb => ({
+          id: kb.id,
+          title: kb.title,
+          relevance: 'high'
+        }))
+      };
 
-      // Create ticket in Supabase
-      const { data, error } = await supabase
+      // Inserisci il ticket
+      const { data: ticket, error: ticketError } = await supabase
         .from('tickets')
-        .insert({
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority as any,
-          category_id: formData.category,
-          user_id: user.id,
-          ai_analysis: aiAnalysisJson
-        })
+        .insert(ticketData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (ticketError) throw ticketError;
+
+      // Log dei suggerimenti KB se presenti
+      if (kbSuggestions.length > 0) {
+        await supabase
+          .from('automation_logs')
+          .insert({
+            ticket_id: ticket.id,
+            action_type: 'kb_suggestion',
+            action_details: {
+              suggestions_count: kbSuggestions.length,
+              suggestions: kbSuggestions.map(kb => kb.title)
+            }
+          });
+      }
+
+      // Invia email di conferma automatica
+      try {
+        await supabase.functions.invoke('send-ticket-confirmation-email', {
+          body: { 
+            ticketId: ticket.id,
+            userEmail: user.email,
+            ticketTitle: title,
+            ticketNumber: ticket.id.substring(0, 8).toUpperCase(),
+            priority: priority,
+            contactName: contactName || profile?.full_name || user.email
+          }
+        });
+        
+        // Aggiorna il flag response_sent
+        await supabase
+          .from('tickets')
+          .update({ response_sent: true })
+          .eq('id', ticket.id);
+
+      } catch (emailError) {
+        console.error('Errore invio email conferma:', emailError);
+        // Non bloccare la creazione del ticket per errori email
+      }
 
       toast({
-        title: "Ticket Creato con Successo! 🎉",
-        description: `Il tuo ticket "${formData.title}" è stato creato e assegnato automaticamente.`,
+        title: "Ticket creato!",
+        description: `Il ticket #${ticket.id.substring(0, 8).toUpperCase()} è stato creato con successo. ${kbSuggestions.length > 0 ? 'Controlla i suggerimenti dalla knowledge base.' : ''}`,
       });
-      
+
       // Reset form
-      setFormData({
-        title: "",
-        description: "",
-        category: "",
-        priority: "medium",
-        urgency: ""
-      });
-      setAiAnalysis(null);
-      setShowAIResults(false);
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+      setCategoryId("");
+      setContactName("");
+      setKbSuggestions([]);
+      setShowKB(false);
       
-      // Call the callback if provided
-      if (onTicketCreated) {
-        onTicketCreated();
-      }
-      
+      onTicketCreated();
       onClose();
-      
     } catch (error) {
-      console.error('Error creating ticket:', error);
+      console.error('Errore creazione ticket:', error);
       toast({
         title: "Errore",
-        description: "Errore nella creazione del ticket. Riprova più tardi.",
+        description: "Impossibile creare il ticket. Riprova.",
         variant: "destructive"
       });
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
+  };
+
+  const handleKbSuggestionClick = (article: KnowledgeBase) => {
+    // Mostra il contenuto dell'articolo in un toast o dialog
+    toast({
+      title: article.title,
+      description: article.content.replace(/<[^>]*>/g, '').substring(0, 200) + "...",
+      duration: 10000,
+    });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
-            <Brain className="w-6 h-6 text-blue-500" />
-            <span>Crea Ticket IT con Intelligenza Artificiale</span>
-          </DialogTitle>
+          <DialogTitle>Crea Nuovo Ticket</DialogTitle>
           <DialogDescription>
-            Il sistema AI analizzerà automaticamente il tuo problema e suggerirà soluzioni personalizzate
+            Compila i dettagli del problema. Il sistema suggerirà automaticamente soluzioni dalla knowledge base.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Setup AI */}
-          <AIKeySetup 
-            onProviderChange={handleProviderChange}
-            currentProvider={currentProvider}
-          />
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Colonna Sinistra - Form */}
-              <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="title">Titolo del Problema *</Label>
+                  <Label htmlFor="contact-name">Nome Contatto</Label>
                   <Input
-                    id="title"
-                    placeholder="Es. Non riesco ad accedere al Wi-Fi"
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    className="mt-1"
+                    id="contact-name"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="Il tuo nome"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="description">Descrizione Dettagliata *</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Descrivi il problema nel dettaglio... L'AI analizzerà automaticamente il tuo testo."
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className="mt-1 min-h-[120px]"
-                  />
-                  {isAnalyzing && (
-                    <div className="flex items-center space-x-2 mt-2 text-sm text-blue-600">
-                      <Brain className="w-4 h-4 animate-pulse" />
-                      <span>L'AI sta analizzando il tuo problema...</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* AI Auto-filled fields */}
-                <div>
-                  <Label htmlFor="category">Categoria {aiAnalysis && "🤖 (Suggerita dall'AI)"}</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-                    <SelectTrigger className={`mt-1 ${aiAnalysis ? 'border-blue-300 bg-blue-50' : ''}`}>
-                      <SelectValue placeholder="Seleziona una categoria" />
+                  <Label htmlFor="priority">Priorità</Label>
+                  <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="low">Bassa</SelectItem>
+                      <SelectItem value="medium">Media</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                      <SelectItem value="urgent">Urgente</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div>
-                  <Label>Priorità {aiAnalysis && "🤖 (Suggerita dall'AI)"}</Label>
-                  <RadioGroup 
-                    value={formData.priority} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
-                    className="mt-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="low" id="low" />
-                      <Label htmlFor="low">Bassa - Non urgente</Label>
+              <div>
+                <Label htmlFor="category">Categoria</Label>
+                <Select value={categoryId} onValueChange={setCategoryId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleziona categoria (opzionale)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: category.color }}
+                          />
+                          {category.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="title">Oggetto *</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Breve descrizione del problema"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Descrizione *</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Descrivi il problema in dettaglio"
+                  className="min-h-32"
+                  required
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Annulla
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Crea Ticket
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
+
+          {/* Knowledge Base Suggestions */}
+          <div className="lg:col-span-1">
+            {showKB && kbSuggestions.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Lightbulb className="h-4 w-4 text-yellow-500" />
+                  Soluzioni Suggerite
+                </div>
+                
+                <div className="space-y-3">
+                  {kbSuggestions.map((suggestion) => (
+                    <div 
+                      key={suggestion.id}
+                      className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => handleKbSuggestionClick(suggestion)}
+                    >
+                      <h4 className="font-medium text-sm mb-1">{suggestion.title}</h4>
+                      <p className="text-xs text-muted-foreground line-clamp-3">
+                        {suggestion.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                      </p>
+                      
+                      {suggestion.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {suggestion.keywords.slice(0, 3).map((keyword, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {keyword}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="medium" id="medium" />
-                      <Label htmlFor="medium">Media - Normale</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="high" id="high" />
-                      <Label htmlFor="high">Alta - Urgente</Label>
-                      {aiAnalysis?.isUrgent && <Badge variant="destructive" className="text-xs">AI: Urgente!</Badge>}
-                    </div>
-                  </RadioGroup>
+                  ))}
                 </div>
 
-                {aiAnalysis && (
-                  <Alert className="border-blue-200 bg-blue-50">
-                    <Clock className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-800">
-                      <strong>Tempo Stimato di Risoluzione:</strong> {aiAnalysis.estimatedResolutionTime}
-                    </AlertDescription>
-                  </Alert>
-                )}
+                <p className="text-xs text-center text-muted-foreground">
+                  💡 Clicca su un suggerimento per vedere la soluzione completa
+                </p>
               </div>
+            )}
 
-              {/* Colonna Destra - AI Results e Suggerimenti */}
-              <div className="space-y-4">
-                {showAIResults && aiAnalysis && aiAnalysis.suggestedSolutions.length > 0 && (
-                  <Card className="border-green-200">
-                    <CardHeader>
-                      <CardTitle className="flex items-center space-x-2">
-                        <Zap className="w-5 h-5 text-green-500" />
-                        <span>Soluzioni AI Personalizzate</span>
-                      </CardTitle>
-                      <CardDescription>
-                        L'intelligenza artificiale ha analizzato il tuo problema e suggerisce:
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {aiAnalysis.suggestedSolutions.map((solution, index) => (
-                        <div key={index} className="p-4 border rounded-lg hover:bg-green-50 transition-colors">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-sm flex items-center space-x-2">
-                                <Target className="w-4 h-4 text-green-600" />
-                                <span>{solution.title}</span>
-                              </h4>
-                              <p className="text-xs text-muted-foreground mt-2">{solution.solution}</p>
-                              <Badge variant="outline" className="text-xs mt-2">
-                                Confidenza AI: {Math.round(solution.confidence * 100)}%
-                              </Badge>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="link" 
-                            size="sm" 
-                            className="p-0 h-auto text-xs mt-2 text-green-600"
-                            onClick={() => applySuggestedSolution(solution)}
-                          >
-                            Prova questa soluzione AI →
-                          </Button>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {aiAnalysis && aiAnalysis.keywords.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">🏷️ Keywords Identificate dall'AI</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {aiAnalysis.keywords.map((keyword, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {keyword}
-                          </Badge>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Suggerimenti sempre visibili */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>💡 Suggerimenti</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <p>• Più dettagli fornisci, più accurata sarà l'analisi AI</p>
-                    <p>• L'AI imparerà dai tuoi ticket per migliorare</p>
-                    <p>• Includi messaggi di errore se presenti</p>
-                    <p>• Specifica sistema operativo e browser</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>📊 Tempi di Risposta AI-Ottimizzati</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>🔴 Alta (AI):</span>
-                      <span>1-2 ore</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>🟡 Media (AI):</span>
-                      <span>4-8 ore</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>🟢 Bassa (AI):</span>
-                      <span>1-2 giorni</span>
-                    </div>
-                  </CardContent>
-                </Card>
+            {!showKB && (
+              <div className="p-4 border rounded-lg text-center text-muted-foreground">
+                <Lightbulb className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">
+                  Inizia a scrivere il problema per ricevere suggerimenti automatici dalla knowledge base
+                </p>
               </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Annulla
-              </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
-                <Brain className="w-4 h-4 mr-2" />
-                {isSubmitting ? 'Creando...' : 'Crea Ticket AI'}
-              </Button>
-            </div>
-          </form>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

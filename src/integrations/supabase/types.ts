@@ -9,6 +9,91 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ad_assets: {
+        Row: {
+          ad_sync_date: string | null
+          additional_info: Json | null
+          computer_name: string | null
+          department: string | null
+          id: string
+          ip_address: string | null
+          last_login: string | null
+          location: string | null
+          os_version: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ad_sync_date?: string | null
+          additional_info?: Json | null
+          computer_name?: string | null
+          department?: string | null
+          id?: string
+          ip_address?: string | null
+          last_login?: string | null
+          location?: string | null
+          os_version?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ad_sync_date?: string | null
+          additional_info?: Json | null
+          computer_name?: string | null
+          department?: string | null
+          id?: string
+          ip_address?: string | null
+          last_login?: string | null
+          location?: string | null
+          os_version?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_assets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_logs: {
+        Row: {
+          action_details: Json | null
+          action_type: string
+          error_message: string | null
+          id: string
+          success: boolean
+          ticket_id: string | null
+          triggered_at: string
+        }
+        Insert: {
+          action_details?: Json | null
+          action_type: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          ticket_id?: string | null
+          triggered_at?: string
+        }
+        Update: {
+          action_details?: Json | null
+          action_type?: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          ticket_id?: string | null
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           color: string | null
@@ -32,6 +117,124 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      email_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          subject: string
+          template_type: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          subject: string
+          template_type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          subject?: string
+          template_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      escalation_rules: {
+        Row: {
+          created_at: string
+          escalate_to_role: string
+          id: string
+          is_active: boolean
+          name: string
+          notification_template_id: string | null
+          priority: string
+          time_threshold_hours: number
+        }
+        Insert: {
+          created_at?: string
+          escalate_to_role: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notification_template_id?: string | null
+          priority: string
+          time_threshold_hours: number
+        }
+        Update: {
+          created_at?: string
+          escalate_to_role?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notification_template_id?: string | null
+          priority?: string
+          time_threshold_hours?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_rules_notification_template_id_fkey"
+            columns: ["notification_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_base: {
+        Row: {
+          category_id: string | null
+          content: string
+          created_at: string
+          id: string
+          is_published: boolean
+          keywords: string[] | null
+          title: string
+          updated_at: string
+          view_count: number | null
+        }
+        Insert: {
+          category_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          keywords?: string[] | null
+          title: string
+          updated_at?: string
+          view_count?: number | null
+        }
+        Update: {
+          category_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          keywords?: string[] | null
+          title?: string
+          updated_at?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -63,10 +266,65 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_interventions: {
+        Row: {
+          created_at: string
+          id: string
+          intervention_type: string
+          notes: string | null
+          scheduled_end: string
+          scheduled_start: string
+          status: string
+          technician_id: string | null
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intervention_type: string
+          notes?: string | null
+          scheduled_end: string
+          scheduled_start: string
+          status?: string
+          technician_id?: string | null
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intervention_type?: string
+          notes?: string | null
+          scheduled_end?: string
+          scheduled_start?: string
+          status?: string
+          technician_id?: string | null
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_interventions_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_interventions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           ai_analysis: Json | null
           assigned_to: string | null
+          auto_assigned: boolean | null
           category_id: string | null
           channel: string | null
           closed_at: string | null
@@ -74,11 +332,15 @@ export type Database = {
           created_at: string | null
           department: string | null
           description: string
+          escalation_count: number | null
           id: string
+          kb_suggestions: Json | null
+          last_escalation_at: string | null
           owner: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes: string | null
           resolved_at: string | null
+          response_sent: boolean | null
           status: Database["public"]["Enums"]["ticket_status"]
           ticket_type: string | null
           title: string
@@ -88,6 +350,7 @@ export type Database = {
         Insert: {
           ai_analysis?: Json | null
           assigned_to?: string | null
+          auto_assigned?: boolean | null
           category_id?: string | null
           channel?: string | null
           closed_at?: string | null
@@ -95,11 +358,15 @@ export type Database = {
           created_at?: string | null
           department?: string | null
           description: string
+          escalation_count?: number | null
           id?: string
+          kb_suggestions?: Json | null
+          last_escalation_at?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
           resolved_at?: string | null
+          response_sent?: boolean | null
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_type?: string | null
           title: string
@@ -109,6 +376,7 @@ export type Database = {
         Update: {
           ai_analysis?: Json | null
           assigned_to?: string | null
+          auto_assigned?: boolean | null
           category_id?: string | null
           channel?: string | null
           closed_at?: string | null
@@ -116,11 +384,15 @@ export type Database = {
           created_at?: string | null
           department?: string | null
           description?: string
+          escalation_count?: number | null
           id?: string
+          kb_suggestions?: Json | null
+          last_escalation_at?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
           resolved_at?: string | null
+          response_sent?: boolean | null
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_type?: string | null
           title?: string
@@ -156,6 +428,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_assign_ticket: {
+        Args: { ticket_id: string; category_name: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _user_id: string

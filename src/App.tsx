@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Statistics from "./pages/Statistics";
 import ImportData from "./pages/ImportData";
+import Automation from "./pages/Automation";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,11 @@ const App = () => (
             <Route path="/import-data" element={
               <ProtectedRoute>
                 <ImportData />
+              </ProtectedRoute>
+            } />
+            <Route path="/automation" element={
+              <ProtectedRoute>
+                <Automation />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

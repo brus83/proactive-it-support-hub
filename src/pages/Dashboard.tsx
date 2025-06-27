@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Clock, CheckCircle, AlertCircle, LogOut, User, BarChart3, Database } from "lucide-react";
+import { Plus, Clock, CheckCircle, AlertCircle, LogOut, User, BarChart3, Database, Zap } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -193,6 +193,16 @@ const Dashboard = () => {
                 <Button variant="outline" size="lg">
                   <Database className="w-4 h-4 mr-2" />
                   Importa Dati
+                </Button>
+              </Link>
+            )}
+
+            {/* Nuovo link per Dashboard Automazione */}
+            {(profile?.role === 'admin' || profile?.role === 'technician') && (
+              <Link to="/automation">
+                <Button variant="outline" size="lg">
+                  <Zap className="w-4 h-4 mr-2" />
+                  Automazione
                 </Button>
               </Link>
             )}
