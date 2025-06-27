@@ -1,14 +1,17 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, CheckCircle, AlertCircle, LogOut, User, BarChart3, Database } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import TicketCard from "@/components/TicketCard";
 import CreateTicketDialog from "@/components/CreateTicketDialog";
+import TicketClosureDialog from "@/components/TicketClosureDialog";
 import AIKeySetup from "@/components/AIKeySetup";
 import { aiService } from "@/services/aiService";
 
@@ -21,6 +24,7 @@ interface DatabaseTicket {
   category_id: string;
   created_at: string;
   updated_at: string;
+  contact_name?: string;
   categories?: {
     name: string;
     color: string;
@@ -36,6 +40,17 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [currentProvider, setCurrentProvider] = useState<'huggingface'>('huggingface');
+  const [closureDialog, setClosureDialog] = useState<{
+    isOpen: boolean;
+    ticketId: string;
+    ticketTitle: string;
+    contactName: string;
+  }>({
+    isOpen: false,
+    ticketId: '',
+    ticketTitle: '',
+    contactName: ''
+  });
 
   const fetchTickets = async () => {
     try {
@@ -44,7 +59,7 @@ const Dashboard = () => {
         .select(`
           *,
           categories (name, color),
-          profiles (full_name)
+          profiles!tickets_user_id_fkey (full_name)
         `)
         .order('created_at', { ascending: false });
 
@@ -115,6 +130,25 @@ const Dashboard = () => {
 
   const handleTicketCreated = async () => {
     await fetchTickets();
+  };
+
+  const handleCloseTicket = (ticketId: string, ticketTitle: string, contactName: string) => {
+    setClosureDialog({
+      isOpen: true,
+      ticketId,
+      ticketTitle,
+      contactName
+    });
+  };
+
+  const handleTicketClosed = async () => {
+    await fetchTickets();
+  };
+
+  // Filter tickets based on status
+  const getFilteredTickets = (status?: string) => {
+    if (!status || status === 'all') return tickets;
+    return tickets.filter(t => t.status === status);
   };
 
   if (loading) {
@@ -195,86 +229,104 @@ const Dashboard = () => {
           currentProvider={currentProvider}
         />
 
-        {/* Statistiche Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Totale Ticket</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statusCounts.total}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Aperti</CardTitle>
+        {/* Tabs per filtrare i ticket */}
+        <Tabs defaultValue="all" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="all" className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Tutti ({statusCounts.total})
+            </TabsTrigger>
+            <TabsTrigger value="open" className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{statusCounts.open}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Lavorazione</CardTitle>
+              Aperti ({statusCounts.open})
+            </TabsTrigger>
+            <TabsTrigger value="in_progress" className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{statusCounts.in_progress}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Risolti</CardTitle>
+              In Lavorazione ({statusCounts.in_progress})
+            </TabsTrigger>
+            <TabsTrigger value="resolved" className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{statusCounts.resolved}</div>
-            </CardContent>
-          </Card>
-        </div>
+              Risolti ({statusCounts.resolved})
+            </TabsTrigger>
+            <TabsTrigger value="closed" className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-gray-500" />
+              Chiusi
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Lista Ticket */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {profile?.role === 'admin' || profile?.role === 'technician' 
-                ? 'Tutti i Ticket' 
-                : 'I Tuoi Ticket'
-              }
-            </CardTitle>
-            <CardDescription>
-              {profile?.role === 'admin' || profile?.role === 'technician'
-                ? 'Panoramica completa di tutti i ticket nel sistema'
-                : 'Panoramica delle tue richieste di supporto'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {tickets.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                  <p>Nessun ticket trovato</p>
-                </div>
-              ) : (
-                tickets.map((ticket) => (
-                  <TicketCard key={ticket.id} ticket={convertToTicketCardFormat(ticket)} />
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Content for each tab */}
+          {['all', 'open', 'in_progress', 'resolved', 'closed'].map((status) => (
+            <TabsContent key={status} value={status}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    {status === 'all' ? 'Tutti i Ticket' :
+                     status === 'open' ? 'Ticket Aperti' :
+                     status === 'in_progress' ? 'Ticket in Lavorazione' :
+                     status === 'resolved' ? 'Ticket Risolti' :
+                     'Ticket Chiusi'}
+                  </CardTitle>
+                  <CardDescription>
+                    {profile?.role === 'admin' || profile?.role === 'technician'
+                      ? 'Panoramica completa di tutti i ticket nel sistema'
+                      : 'Panoramica delle tue richieste di supporto'
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {getFilteredTickets(status === 'all' ? undefined : status).length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                        <p>Nessun ticket trovato per questa categoria</p>
+                      </div>
+                    ) : (
+                      getFilteredTickets(status === 'all' ? undefined : status).map((ticket) => (
+                        <div key={ticket.id} className="relative">
+                          <TicketCard 
+                            ticket={convertToTicketCardFormat(ticket)} 
+                          />
+                          {(profile?.role === 'admin' || profile?.role === 'technician') && 
+                           ticket.status === 'resolved' && (
+                            <div className="absolute top-4 right-4">
+                              <Button
+                                size="sm"
+                                onClick={() => handleCloseTicket(
+                                  ticket.id, 
+                                  ticket.title, 
+                                  ticket.contact_name || 'Cliente'
+                                )}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                Chiudi Ticket
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
 
         {/* Dialog per creare nuovo ticket */}
         <CreateTicketDialog 
           isOpen={isCreateDialogOpen}
           onClose={() => setIsCreateDialogOpen(false)}
           onTicketCreated={handleTicketCreated}
+        />
+
+        {/* Dialog per chiudere ticket */}
+        <TicketClosureDialog
+          isOpen={closureDialog.isOpen}
+          onClose={() => setClosureDialog(prev => ({ ...prev, isOpen: false }))}
+          ticketId={closureDialog.ticketId}
+          ticketTitle={closureDialog.ticketTitle}
+          contactName={closureDialog.contactName}
+          onTicketClosed={handleTicketClosed}
         />
       </div>
     </div>

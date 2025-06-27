@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,8 +36,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
   
   const [aiAnalysis, setAiAnalysis] = useState<TicketAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [currentProvider, setCurrentProvider] = useState<'openai' | 'huggingface' | 'heuristic'>('heuristic');
+  const [currentProvider, setCurrentProvider] = useState<'huggingface'>('huggingface');
   const [showAIResults, setShowAIResults] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -95,16 +95,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
     }
   };
 
-  const handleApiKeySet = (apiKey: string) => {
-    aiService.setApiKey(apiKey);
-    setHasApiKey(true);
-    setCurrentProvider('openai');
-    if (formData.title && formData.description) {
-      analyzeTicketWithAI();
-    }
-  };
-
-  const handleProviderChange = (provider: 'openai' | 'huggingface' | 'heuristic') => {
+  const handleProviderChange = (provider: 'huggingface') => {
     aiService.setProvider(provider);
     setCurrentProvider(provider);
     if (formData.title && formData.description) {
@@ -213,9 +204,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         <div className="space-y-6">
           {/* Setup AI */}
           <AIKeySetup 
-            onApiKeySet={handleApiKeySet} 
             onProviderChange={handleProviderChange}
-            hasApiKey={hasApiKey} 
             currentProvider={currentProvider}
           />
 
