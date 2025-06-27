@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface AutomationLog {
@@ -42,7 +41,6 @@ export interface ScheduledIntervention {
 }
 
 class AutomationService {
-  // Ottieni suggerimenti dalla knowledge base
   async getKBSuggestions(searchText: string): Promise<KnowledgeBase[]> {
     const { data, error } = await supabase
       .from('knowledge_base')
@@ -55,7 +53,6 @@ class AutomationService {
     return data || [];
   }
 
-  // Cerca nella knowledge base per parole chiave
   async searchKBByKeywords(keywords: string[]): Promise<KnowledgeBase[]> {
     const { data, error } = await supabase
       .from('knowledge_base')
@@ -68,7 +65,6 @@ class AutomationService {
     return data || [];
   }
 
-  // Ottieni regole di escalation
   async getEscalationRules(): Promise<EscalationRule[]> {
     const { data, error } = await supabase
       .from('escalation_rules')
@@ -77,13 +73,17 @@ class AutomationService {
       .order('time_threshold_hours', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    const allowed = ["low", "medium", "high", "urgent"] as const;
+
+    return (data || []).map(rule => ({
+      ...rule,
+      priority: allowed.includes(rule.priority) ? rule.priority : "low"
+    }));
   }
 
-  // Controlla ticket per escalation
   async checkTicketsForEscalation(): Promise<void> {
     const rules = await this.getEscalationRules();
-    
+
     for (const rule of rules) {
       const { data: tickets } = await supabase
         .from('tickets')
@@ -100,19 +100,24 @@ class AutomationService {
     }
   }
 
-  // Escalation di un ticket
   private async escalateTicket(ticketId: string, rule: EscalationRule): Promise<void> {
-    // Aggiorna il ticket
+    const { data: ticketData, error: fetchError } = await supabase
+      .from('tickets')
+      .select('escalation_count')
+      .eq('id', ticketId)
+      .single();
+
+    if (fetchError || !ticketData) throw fetchError;
+
     await supabase
       .from('tickets')
       .update({
-        escalation_count: supabase.sql`escalation_count + 1`,
+        escalation_count: ticketData.escalation_count + 1,
         last_escalation_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', ticketId);
 
-    // Log dell'escalation
     await supabase
       .from('automation_logs')
       .insert({
@@ -128,23 +133,27 @@ class AutomationService {
     console.log(`Ticket ${ticketId} escalated using rule: ${rule.name}`);
   }
 
-  // Ottieni log delle automazioni
   async getAutomationLogs(ticketId?: string): Promise<AutomationLog[]> {
     let query = supabase.from('automation_logs').select('*');
-    
+
     if (ticketId) {
       query = query.eq('ticket_id', ticketId);
     }
-    
+
     const { data, error } = await query
       .order('triggered_at', { ascending: false })
       .limit(100);
 
     if (error) throw error;
-    return data || [];
+
+    const allowed = ["auto_assign", "auto_categorize", "escalation", "auto_response", "kb_suggestion"] as const;
+
+    return (data || []).map(log => ({
+      ...log,
+      action_type: allowed.includes(log.action_type) ? log.action_type : "auto_response"
+    }));
   }
 
-  // Pianifica intervento
   async scheduleIntervention(intervention: Omit<ScheduledIntervention, 'id'>): Promise<ScheduledIntervention> {
     const { data, error } = await supabase
       .from('scheduled_interventions')
@@ -156,7 +165,6 @@ class AutomationService {
     return data;
   }
 
-  // Ottieni interventi programmati
   async getScheduledInterventions(technicianId?: string): Promise<ScheduledIntervention[]> {
     let query = supabase
       .from('scheduled_interventions')
@@ -170,17 +178,21 @@ class AutomationService {
       query = query.eq('technician_id', technicianId);
     }
 
-    const { data, error } = await query
-      .order('scheduled_start', { ascending: true });
+    const { data, error } = await query.order('scheduled_start', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+
+    const allowedTypes = ["remote", "on_site", "phone"] as const;
+
+    return (data || []).map(intervention => ({
+      ...intervention,
+      intervention_type: allowedTypes.includes(intervention.intervention_type) ? intervention.intervention_type : "remote"
+    }));
   }
 
-  // Aggiorna stato intervento
   async updateInterventionStatus(
-    interventionId: string, 
-    status: ScheduledIntervention['status'], 
+    interventionId: string,
+    status: ScheduledIntervention['status'],
     notes?: string
   ): Promise<void> {
     const updateData: any = { status, updated_at: new Date().toISOString() };
@@ -194,14 +206,12 @@ class AutomationService {
     if (error) throw error;
   }
 
-  // Analisi predittiva semplice per carico di lavoro
   async getPredictiveAnalysis(): Promise<{
     peakHours: number[];
     busiestDepartments: string[];
     commonIssues: string[];
     resolutionTrends: any[];
   }> {
-    // Analisi degli orari di picco
     const { data: hourlyData } = await supabase
       .from('tickets')
       .select('created_at')
@@ -214,11 +224,10 @@ class AutomationService {
     });
 
     const peakHours = Object.entries(hourCounts)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([hour]) => parseInt(hour));
 
-    // Dipartimenti più impegnati
     const { data: deptData } = await supabase
       .from('tickets')
       .select('department')
@@ -233,15 +242,15 @@ class AutomationService {
     });
 
     const busiestDepartments = Object.entries(deptCounts)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([dept]) => dept);
 
     return {
       peakHours,
       busiestDepartments,
-      commonIssues: ['Password Reset', 'Printer Issues', 'Network Problems'], // Placeholder
-      resolutionTrends: [] // Placeholder
+      commonIssues: ['Password Reset', 'Printer Issues', 'Network Problems'],
+      resolutionTrends: []
     };
   }
 }
