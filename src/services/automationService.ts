@@ -73,11 +73,15 @@ class AutomationService {
       .order('time_threshold_hours', { ascending: true });
 
     if (error) throw error;
-    const allowed = ["low", "medium", "high", "urgent"] as const;
+    
+    // Correzione: Assicurarsi che priority sia del tipo corretto
+    const allowedPriorities = ["low", "medium", "high", "urgent"] as const;
+    const allowedRoles = ["technician", "admin"] as const;
 
     return (data || []).map(rule => ({
       ...rule,
-      priority: allowed.includes(rule.priority) ? rule.priority : "low"
+      priority: allowedPriorities.includes(rule.priority as any) ? rule.priority as EscalationRule['priority'] : "low",
+      escalate_to_role: allowedRoles.includes(rule.escalate_to_role as any) ? rule.escalate_to_role as EscalationRule['escalate_to_role'] : "technician"
     }));
   }
 
@@ -85,6 +89,7 @@ class AutomationService {
     const rules = await this.getEscalationRules();
 
     for (const rule of rules) {
+      // Correzione: Rimuovere .sql che non esiste in Supabase client
       const { data: tickets } = await supabase
         .from('tickets')
         .select('*')
@@ -146,11 +151,12 @@ class AutomationService {
 
     if (error) throw error;
 
-    const allowed = ["auto_assign", "auto_categorize", "escalation", "auto_response", "kb_suggestion"] as const;
+    // Correzione: Assicurarsi che action_type sia del tipo corretto
+    const allowedActionTypes = ["auto_assign", "auto_categorize", "escalation", "auto_response", "kb_suggestion"] as const;
 
     return (data || []).map(log => ({
       ...log,
-      action_type: allowed.includes(log.action_type) ? log.action_type : "auto_response"
+      action_type: allowedActionTypes.includes(log.action_type as any) ? log.action_type as AutomationLog['action_type'] : "auto_response"
     }));
   }
 
@@ -162,7 +168,16 @@ class AutomationService {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Correzione: Assicurarsi che intervention_type sia del tipo corretto
+    const allowedTypes = ["remote", "on_site", "phone"] as const;
+    const allowedStatuses = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+    
+    return {
+      ...data,
+      intervention_type: allowedTypes.includes(data.intervention_type as any) ? data.intervention_type as ScheduledIntervention['intervention_type'] : "remote",
+      status: allowedStatuses.includes(data.status as any) ? data.status as ScheduledIntervention['status'] : "scheduled"
+    };
   }
 
   async getScheduledInterventions(technicianId?: string): Promise<ScheduledIntervention[]> {
@@ -182,11 +197,14 @@ class AutomationService {
 
     if (error) throw error;
 
+    // Correzione: Assicurarsi che intervention_type sia del tipo corretto
     const allowedTypes = ["remote", "on_site", "phone"] as const;
+    const allowedStatuses = ["scheduled", "in_progress", "completed", "cancelled"] as const;
 
     return (data || []).map(intervention => ({
       ...intervention,
-      intervention_type: allowedTypes.includes(intervention.intervention_type) ? intervention.intervention_type : "remote"
+      intervention_type: allowedTypes.includes(intervention.intervention_type as any) ? intervention.intervention_type as ScheduledIntervention['intervention_type'] : "remote",
+      status: allowedStatuses.includes(intervention.status as any) ? intervention.status as ScheduledIntervention['status'] : "scheduled"
     }));
   }
 
