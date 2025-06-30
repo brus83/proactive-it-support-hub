@@ -1,8 +1,7 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, User, Tag } from "lucide-react";
+import { Clock, User, Tag, Eye, Edit, MessageSquare } from "lucide-react";
 
 export type TicketStatus = "pending" | "in_progress" | "resolved";
 export type TicketPriority = "low" | "medium" | "high";
@@ -21,6 +20,8 @@ export interface Ticket {
 
 interface TicketCardProps {
   ticket: Ticket;
+  onView?: (ticketId: string) => void;
+  onEdit?: (ticketId: string) => void;
 }
 
 const getStatusColor = (status: TicketStatus) => {
@@ -59,7 +60,7 @@ const getPriorityText = (priority: TicketPriority) => {
   }
 };
 
-const TicketCard = ({ ticket }: TicketCardProps) => {
+const TicketCard = ({ ticket, onView, onEdit }: TicketCardProps) => {
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('it-IT', {
       day: '2-digit',
@@ -70,6 +71,18 @@ const TicketCard = ({ ticket }: TicketCardProps) => {
     }).format(date);
   };
 
+  const handleViewClick = () => {
+    if (onView) {
+      onView(ticket.id);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (onEdit) {
+      onEdit(ticket.id);
+    }
+  };
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-6">
@@ -78,7 +91,7 @@ const TicketCard = ({ ticket }: TicketCardProps) => {
             <div className="flex items-center space-x-2 mb-2">
               <h3 className="text-lg font-semibold truncate">{ticket.title}</h3>
               <Badge variant="outline" className="text-xs">
-                {ticket.id}
+                #{ticket.id.substring(0, 8).toUpperCase()}
               </Badge>
             </div>
             
@@ -115,9 +128,29 @@ const TicketCard = ({ ticket }: TicketCardProps) => {
               Priorità {getPriorityText(ticket.priority)}
             </Badge>
             
-            <Button variant="outline" size="sm" className="mt-2">
-              Visualizza
-            </Button>
+            <div className="flex gap-2 mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleViewClick}
+                className="flex items-center gap-1"
+              >
+                <Eye className="w-4 h-4" />
+                Visualizza
+              </Button>
+              
+              {ticket.status !== 'resolved' && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleEditClick}
+                  className="flex items-center gap-1"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Commenta
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>

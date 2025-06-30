@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Lightbulb } from "lucide-react";
+import { Loader2, Lightbulb, AlertCircle } from "lucide-react";
 import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
 import { automationService, KnowledgeBase } from "@/services/automationService";
 
@@ -36,6 +35,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
   const [loading, setLoading] = useState(false);
   const [kbSuggestions, setKbSuggestions] = useState<KnowledgeBase[]>([]);
   const [showKB, setShowKB] = useState(false);
+  const [error, setError] = useState<string>("");
   
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -46,6 +46,14 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
       if (profile?.full_name) {
         setContactName(profile.full_name);
       }
+      // Reset form
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+      setCategoryId("");
+      setKbSuggestions([]);
+      setShowKB(false);
+      setError("");
     }
   }, [isOpen, profile]);
 
@@ -56,6 +64,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
       searchKnowledgeBase(searchTerm.trim());
     } else {
       setKbSuggestions([]);
+      setShowKB(false);
     }
   }, [title, description]);
 
@@ -80,12 +89,31 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
       setCategories(data || []);
     } catch (error) {
       console.error('Errore caricamento categorie:', error);
+      setError('Errore nel caricamento delle categorie');
     }
+  };
+
+  const validateForm = () => {
+    if (!title.trim()) {
+      setError('Il titolo è obbligatorio');
+      return false;
+    }
+    if (!description.trim()) {
+      setError('La descrizione è obbligatoria');
+      return false;
+    }
+    if (!user) {
+      setError('Utente non autenticato');
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !title.trim() || !description.trim()) return;
+    setError("");
+    
+    if (!validateForm()) return;
 
     setLoading(true);
     try {
@@ -94,8 +122,8 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         description: description.trim(),
         priority,
         category_id: categoryId || null,
-        contact_name: contactName || profile?.full_name || user.email,
-        user_id: user.id,
+        contact_name: contactName || profile?.full_name || user!.email,
+        user_id: user!.id,
         status: 'open' as const,
         kb_suggestions: kbSuggestions.map(kb => ({
           id: kb.id,
@@ -104,6 +132,8 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         }))
       };
 
+      console.log('Creazione ticket con dati:', ticketData);
+
       // Inserisci il ticket
       const { data: ticket, error: ticketError } = await supabase
         .from('tickets')
@@ -111,20 +141,30 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         .select()
         .single();
 
-      if (ticketError) throw ticketError;
+      if (ticketError) {
+        console.error('Errore inserimento ticket:', ticketError);
+        throw new Error(`Errore creazione ticket: ${ticketError.message}`);
+      }
+
+      console.log('Ticket creato:', ticket);
 
       // Log dei suggerimenti KB se presenti
       if (kbSuggestions.length > 0) {
-        await supabase
-          .from('automation_logs')
-          .insert({
-            ticket_id: ticket.id,
-            action_type: 'kb_suggestion',
-            action_details: {
-              suggestions_count: kbSuggestions.length,
-              suggestions: kbSuggestions.map(kb => kb.title)
-            }
-          });
+        try {
+          await supabase
+            .from('automation_logs')
+            .insert({
+              ticket_id: ticket.id,
+              action_type: 'kb_suggestion',
+              action_details: {
+                suggestions_count: kbSuggestions.length,
+                suggestions: kbSuggestions.map(kb => kb.title)
+              }
+            });
+        } catch (logError) {
+          console.error('Errore log KB suggestions:', logError);
+          // Non bloccare per errori di log
+        }
       }
 
       // Invia email di conferma automatica
@@ -132,11 +172,11 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         await supabase.functions.invoke('send-ticket-confirmation-email', {
           body: { 
             ticketId: ticket.id,
-            userEmail: user.email,
+            userEmail: user!.email,
             ticketTitle: title,
             ticketNumber: ticket.id.substring(0, 8).toUpperCase(),
             priority: priority,
-            contactName: contactName || profile?.full_name || user.email
+            contactName: contactName || profile?.full_name || user!.email
           }
         });
         
@@ -167,11 +207,12 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
       
       onTicketCreated();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Errore creazione ticket:', error);
+      setError(error.message || "Impossibile creare il ticket. Riprova.");
       toast({
         title: "Errore",
-        description: "Impossibile creare il ticket. Riprova.",
+        description: error.message || "Impossibile creare il ticket. Riprova.",
         variant: "destructive"
       });
     } finally {
@@ -197,6 +238,15 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
             Compila i dettagli del problema. Il sistema suggerirà automaticamente soluzioni dalla knowledge base.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+            <div className="flex items-center gap-2 text-red-800">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">{error}</span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">

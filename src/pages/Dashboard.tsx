@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import TicketCard from "@/components/TicketCard";
 import CreateTicketDialog from "@/components/CreateTicketDialog";
+import TicketDetailDialog from "@/components/TicketDetailDialog";
 import TicketClosureDialog from "@/components/TicketClosureDialog";
 import AIKeySetup from "@/components/AIKeySetup";
 import { aiService } from "@/services/aiService";
@@ -40,6 +40,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [currentProvider, setCurrentProvider] = useState<'huggingface'>('huggingface');
+  const [selectedTicketId, setSelectedTicketId] = useState<string>("");
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [closureDialog, setClosureDialog] = useState<{
     isOpen: boolean;
     ticketId: string;
@@ -54,7 +56,7 @@ const Dashboard = () => {
 
   const fetchTickets = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tickets')
         .select(`
           *,
@@ -62,6 +64,13 @@ const Dashboard = () => {
           profiles!tickets_user_id_fkey (full_name)
         `)
         .order('created_at', { ascending: false });
+
+      // Se l'utente non è admin o tecnico, mostra solo i suoi ticket
+      if (profile?.role !== 'admin' && profile?.role !== 'technician') {
+        query = query.eq('user_id', user?.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -83,7 +92,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchTickets();
-  }, []);
+  }, [profile, user]);
 
   const statusCounts = {
     total: tickets.length,
@@ -132,6 +141,16 @@ const Dashboard = () => {
     await fetchTickets();
   };
 
+  const handleTicketView = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsDetailDialogOpen(true);
+  };
+
+  const handleTicketEdit = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsDetailDialogOpen(true);
+  };
+
   const handleCloseTicket = (ticketId: string, ticketTitle: string, contactName: string) => {
     setClosureDialog({
       isOpen: true,
@@ -142,6 +161,10 @@ const Dashboard = () => {
   };
 
   const handleTicketClosed = async () => {
+    await fetchTickets();
+  };
+
+  const handleTicketUpdated = async () => {
     await fetchTickets();
   };
 
@@ -294,7 +317,9 @@ const Dashboard = () => {
                       getFilteredTickets(status === 'all' ? undefined : status).map((ticket) => (
                         <div key={ticket.id} className="relative">
                           <TicketCard 
-                            ticket={convertToTicketCardFormat(ticket)} 
+                            ticket={convertToTicketCardFormat(ticket)}
+                            onView={handleTicketView}
+                            onEdit={handleTicketEdit}
                           />
                           {(profile?.role === 'admin' || profile?.role === 'technician') && 
                            ticket.status === 'resolved' && (
@@ -327,6 +352,14 @@ const Dashboard = () => {
           isOpen={isCreateDialogOpen}
           onClose={() => setIsCreateDialogOpen(false)}
           onTicketCreated={handleTicketCreated}
+        />
+
+        {/* Dialog per visualizzare dettagli ticket */}
+        <TicketDetailDialog
+          isOpen={isDetailDialogOpen}
+          onClose={() => setIsDetailDialogOpen(false)}
+          ticketId={selectedTicketId}
+          onTicketUpdated={handleTicketUpdated}
         />
 
         {/* Dialog per chiudere ticket */}
