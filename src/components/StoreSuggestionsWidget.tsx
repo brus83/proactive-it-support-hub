@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,11 +57,13 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
       }
 
       // Cerca suggerimenti generali basati sul testo completo
-      const generalSuggestions = await storeService.getStoreSuggestions(fullText);
-      allSuggestions.push(...generalSuggestions.map(s => ({ 
-        ...s, 
-        relevance_score: s.relevance_score || 0.5 
-      })));
+      if (fullText.trim().length > 3) {
+        const generalSuggestions = await storeService.getStoreSuggestions(fullText);
+        allSuggestions.push(...generalSuggestions.map(s => ({ 
+          ...s, 
+          relevance_score: s.relevance_score || 0.5 
+        })));
+      }
 
       // Rimuovi duplicati e ordina per rilevanza
       const uniqueSuggestions = allSuggestions
@@ -75,18 +76,28 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
       setSuggestions(uniqueSuggestions);
     } catch (error) {
       console.error('Errore nel caricamento suggerimenti:', error);
+      toast.error('Errore nel caricamento suggerimenti negozi');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
+    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+      toast.error('Inserisci almeno 2 caratteri per la ricerca');
+      return;
+    }
     
     setLoading(true);
     try {
       const results = await storeService.getStoreSuggestions(searchTerm);
       setSearchResults(results);
+      
+      if (results.length === 0) {
+        toast.info('Nessun negozio trovato per la ricerca');
+      } else {
+        toast.success(`Trovati ${results.length} negozi`);
+      }
     } catch (error) {
       console.error('Errore nella ricerca:', error);
       toast.error('Errore nella ricerca negozi');
@@ -218,10 +229,14 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
           />
           <Button 
             onClick={handleSearch} 
-            disabled={loading}
+            disabled={loading || searchTerm.trim().length < 2}
             size="sm"
           >
-            <Search className="w-4 h-4" />
+            {loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Search className="w-4 h-4" />
+            )}
           </Button>
         </div>
 
@@ -251,7 +266,7 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
         {searchResults.length > 0 && (
           <div>
             <h3 className="font-medium text-sm mb-2 text-gray-700">
-              🔍 Risultati Ricerca
+              🔍 Risultati Ricerca ({searchResults.length})
             </h3>
             {searchResults.map((store) => (
               <StoreCard 

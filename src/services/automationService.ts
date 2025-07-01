@@ -41,27 +41,53 @@ export interface ScheduledIntervention {
 
 class AutomationService {
   async getKBSuggestions(searchText: string): Promise<KnowledgeBase[]> {
-    const { data, error } = await supabase
-      .from('knowledge_base')
-      .select('*')
-      .eq('is_published', true)
-      .or(`title.ilike.%${searchText}%,content.ilike.%${searchText}%`)
-      .limit(5);
+    try {
+      if (!searchText || searchText.trim().length < 2) {
+        return [];
+      }
 
-    if (error) throw error;
-    return data || [];
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .select('*')
+        .eq('is_published', true)
+        .or(`title.ilike.%${searchText}%,content.ilike.%${searchText}%`)
+        .limit(10);
+
+      if (error) {
+        console.error('Errore ricerca KB:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Errore in getKBSuggestions:', error);
+      return [];
+    }
   }
 
   async searchKBByKeywords(keywords: string[]): Promise<KnowledgeBase[]> {
-    const { data, error } = await supabase
-      .from('knowledge_base')
-      .select('*')
-      .eq('is_published', true)
-      .overlaps('keywords', keywords)
-      .limit(10);
+    try {
+      if (!keywords || keywords.length === 0) {
+        return [];
+      }
 
-    if (error) throw error;
-    return data || [];
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .select('*')
+        .eq('is_published', true)
+        .overlaps('keywords', keywords)
+        .limit(10);
+
+      if (error) {
+        console.error('Errore ricerca KB per keywords:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Errore in searchKBByKeywords:', error);
+      return [];
+    }
   }
 
   async getEscalationRules(): Promise<EscalationRule[]> {
@@ -279,14 +305,13 @@ class AutomationService {
       const storeSuggestions = await storeService.getStoreSuggestions(ticketText);
       
       // Ottieni suggerimenti dalla knowledge base
-      const { data: kbSuggestions } = await supabase
-        .from('knowledge_base')
-        .select('*')
-        .eq('is_published', true)
-        .limit(5);
+      const kbSuggestions = await this.getKBSuggestions(ticketText);
+
+      // Estrai informazioni dal testo
+      const extractedInfo = storeService.extractStoreInfo(ticketText);
 
       // Genera azioni suggerite
-      const actions = this.generateActionSuggestions(ticketText);
+      const actions = this.generateActionSuggestions(ticketText, extractedInfo);
 
       // Converti in oggetto serializzabile per JSON
       const suggestions = {
@@ -298,7 +323,7 @@ class AutomationService {
           city: store.city,
           relevance_score: store.relevance_score
         })),
-        knowledgeBase: (kbSuggestions || []).map(kb => ({
+        knowledgeBase: kbSuggestions.map(kb => ({
           id: kb.id,
           title: kb.title,
           content: kb.content,
@@ -328,7 +353,7 @@ class AutomationService {
           ticket_id: ticketId,
           action_type: 'kb_suggestion',
           action_details: {
-            suggestions_count: storeSuggestions.length + (kbSuggestions?.length || 0),
+            suggestions_count: storeSuggestions.length + kbSuggestions.length,
             actions_count: actions.length
           },
           success: true
@@ -351,7 +376,7 @@ class AutomationService {
     }
   }
 
-  private generateActionSuggestions(ticketText: string): string[] {
+  private generateActionSuggestions(ticketText: string, extractedInfo: any): string[] {
     const actions = [];
     const lowerText = ticketText.toLowerCase();
 

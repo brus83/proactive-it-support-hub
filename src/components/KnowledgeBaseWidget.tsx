@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,14 +25,14 @@ const KnowledgeBaseWidget = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    if (searchQuery) {
+    if (searchQuery && searchQuery.trim().length > 2) {
       setLocalSearch(searchQuery);
       searchKnowledgeBase(searchQuery);
     }
   }, [searchQuery]);
 
   const searchKnowledgeBase = async (query: string) => {
-    if (!query.trim()) {
+    if (!query.trim() || query.trim().length < 2) {
       setSuggestions([]);
       return;
     }
@@ -42,6 +41,13 @@ const KnowledgeBaseWidget = ({
     try {
       const results = await automationService.getKBSuggestions(query);
       setSuggestions(results);
+      
+      if (results.length === 0) {
+        toast({
+          title: "Nessun risultato",
+          description: `Nessun articolo trovato per "${query}"`,
+        });
+      }
     } catch (error) {
       console.error('Errore ricerca KB:', error);
       toast({
@@ -55,6 +61,14 @@ const KnowledgeBaseWidget = ({
   };
 
   const handleSearch = () => {
+    if (localSearch.trim().length < 2) {
+      toast({
+        title: "Ricerca troppo breve",
+        description: "Inserisci almeno 2 caratteri per la ricerca",
+        variant: "destructive"
+      });
+      return;
+    }
     searchKnowledgeBase(localSearch);
   };
 
@@ -111,8 +125,15 @@ const KnowledgeBaseWidget = ({
             onChange={(e) => setLocalSearch(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
           />
-          <Button onClick={handleSearch} disabled={loading}>
-            <Search className="h-4 w-4" />
+          <Button 
+            onClick={handleSearch} 
+            disabled={loading || localSearch.trim().length < 2}
+          >
+            {loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
           </Button>
         </div>
 
@@ -125,6 +146,9 @@ const KnowledgeBaseWidget = ({
         {suggestions.length > 0 && (
           <ScrollArea className="h-96">
             <div className="space-y-3">
+              <div className="text-sm text-muted-foreground mb-2">
+                Trovati {suggestions.length} articoli
+              </div>
               {suggestions.map((article) => (
                 <Card 
                   key={article.id} 
@@ -135,7 +159,7 @@ const KnowledgeBaseWidget = ({
                     <h4 className="font-medium">{article.title}</h4>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Eye className="h-3 w-3" />
-                      {article.view_count}
+                      {article.view_count || 0}
                     </div>
                   </div>
                   
@@ -143,7 +167,7 @@ const KnowledgeBaseWidget = ({
                     {article.content.replace(/<[^>]*>/g, '').substring(0, 200)}...
                   </p>
                   
-                  {article.keywords.length > 0 && (
+                  {article.keywords && article.keywords.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {article.keywords.slice(0, 5).map((keyword, index) => (
                         <Badge key={index} variant="secondary" className="text-xs">
@@ -161,6 +185,15 @@ const KnowledgeBaseWidget = ({
         {localSearch && suggestions.length === 0 && !loading && (
           <div className="text-center py-4 text-muted-foreground">
             Nessun risultato trovato per "{localSearch}"
+          </div>
+        )}
+
+        {!localSearch && suggestions.length === 0 && !loading && (
+          <div className="text-center py-4 text-muted-foreground">
+            <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">
+              Inserisci un termine di ricerca per trovare articoli nella knowledge base
+            </p>
           </div>
         )}
       </CardContent>
