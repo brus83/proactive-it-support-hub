@@ -22,6 +22,7 @@ class StoreService {
       return [];
     }
 
+    // Ora la funzione RPC restituisce già is_active
     return data || [];
   }
 

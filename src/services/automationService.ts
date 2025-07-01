@@ -24,10 +24,8 @@ export interface KnowledgeBase {
   id: string;
   title: string;
   content: string;
-  category_id?: string;
   keywords: string[];
   view_count: number;
-  is_published: boolean;
 }
 
 export interface ScheduledIntervention {
@@ -273,63 +271,55 @@ class AutomationService {
     };
   }
 
-  async generateSmartSuggestions(ticketId: string, ticketText: string): Promise<{
-    storeSuggestions: any[];
-    kbSuggestions: any[];
-    automatedActions: string[];
-  }> {
+  async generateSmartSuggestions(ticketId: string, ticketText: string) {
     try {
-      // Suggerimenti negozi
+      console.log('Generazione suggerimenti intelligenti per ticket:', ticketId);
+
+      // Ottieni suggerimenti dai negozi
       const storeSuggestions = await storeService.getStoreSuggestions(ticketText);
-      const extractedInfo = storeService.extractStoreInfo(ticketText);
       
-      // Arricchisci i suggerimenti con informazioni estratte
-      const enrichedStoreSuggestions = [];
-      
-      // Aggiungi negozi trovati per codice
-      for (const code of extractedInfo.possibleStoreCodes) {
-        const store = await storeService.getStoreByCode(code);
-        if (store) {
-          enrichedStoreSuggestions.push({
-            ...store,
-            matchType: 'exact_code',
-            matchValue: code,
-            confidence: 1.0
-          });
-        }
-      }
-      
-      // Aggiungi negozi trovati per IP
-      for (const ip of extractedInfo.possibleIPs) {
-        const store = await storeService.getStoreByIpRange(ip);
-        if (store) {
-          enrichedStoreSuggestions.push({
-            ...store,
-            matchType: 'ip_range',
-            matchValue: ip,
-            confidence: 0.9
-          });
-        }
-      }
+      // Ottieni suggerimenti dalla knowledge base
+      const { data: kbSuggestions } = await supabase
+        .from('knowledge_base')
+        .select('*')
+        .eq('is_published', true)
+        .limit(5);
 
-      // Suggerimenti knowledge base
-      const kbSuggestions = await this.getKBSuggestions(ticketText);
+      // Genera azioni suggerite
+      const actions = this.generateActionSuggestions(ticketText);
 
-      // Azioni automatiche suggerite
-      const automatedActions = this.generateAutomatedActions(ticketText, extractedInfo);
+      // Converti in oggetto serializzabile per JSON
+      const suggestions = {
+        stores: storeSuggestions.map(store => ({
+          id: store.id,
+          store_name: store.store_name,
+          store_code: store.store_code,
+          ip_range: store.ip_range,
+          city: store.city,
+          relevance_score: store.relevance_score
+        })),
+        knowledgeBase: (kbSuggestions || []).map(kb => ({
+          id: kb.id,
+          title: kb.title,
+          content: kb.content,
+          keywords: kb.keywords
+        })),
+        actions,
+        generated_at: new Date().toISOString()
+      };
 
       // Salva i suggerimenti nel ticket
-      await supabase
+      const { error } = await supabase
         .from('tickets')
-        .update({
-          kb_suggestions: {
-            stores: enrichedStoreSuggestions,
-            knowledgeBase: kbSuggestions,
-            actions: automatedActions,
-            generated_at: new Date().toISOString()
-          }
+        .update({ 
+          kb_suggestions: suggestions
         })
         .eq('id', ticketId);
+
+      if (error) {
+        console.error('Errore nel salvataggio suggerimenti:', error);
+        return;
+      }
 
       // Log dell'azione
       await supabase
@@ -338,29 +328,30 @@ class AutomationService {
           ticket_id: ticketId,
           action_type: 'kb_suggestion',
           action_details: {
-            store_suggestions_count: enrichedStoreSuggestions.length,
-            kb_suggestions_count: kbSuggestions.length,
-            actions_count: automatedActions.length
-          }
+            suggestions_count: storeSuggestions.length + (kbSuggestions?.length || 0),
+            actions_count: actions.length
+          },
+          success: true
         });
 
-      return {
-        storeSuggestions: enrichedStoreSuggestions,
-        kbSuggestions,
-        automatedActions
-      };
-
+      console.log('Suggerimenti intelligenti generati con successo');
     } catch (error) {
-      console.error('Errore nella generazione suggerimenti:', error);
-      return {
-        storeSuggestions: [],
-        kbSuggestions: [],
-        automatedActions: []
-      };
+      console.error('Errore nella generazione suggerimenti intelligenti:', error);
+      
+      // Log dell'errore
+      await supabase
+        .from('automation_logs')
+        .insert({
+          ticket_id: ticketId,
+          action_type: 'kb_suggestion',
+          action_details: { error: 'Failed to generate suggestions' },
+          success: false,
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
   }
 
-  private generateAutomatedActions(ticketText: string, extractedInfo: any): string[] {
+  private generateActionSuggestions(ticketText: string): string[] {
     const actions = [];
     const lowerText = ticketText.toLowerCase();
 
