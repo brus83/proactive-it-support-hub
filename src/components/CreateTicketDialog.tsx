@@ -1,84 +1,64 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2, Lightbulb, AlertCircle } from "lucide-react";
-import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
-import { automationService, KnowledgeBase } from "@/services/automationService";
-
-interface CreateTicketDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onTicketCreated: () => void;
-}
+import { toast } from "sonner";
+import { automationService } from "@/services/automationService";
 
 interface Category {
   id: string;
   name: string;
-  color: string;
 }
 
-const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDialogProps) => {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [contactName, setContactName] = useState("");
+interface TicketFormData {
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  category_id: string;
+}
+
+interface CreateTicketDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onTicketCreated?: () => void;
+}
+
+const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
+  isOpen,
+  onClose,
+  onTicketCreated
+}) => {
+  const [formData, setFormData] = useState<TicketFormData>({
+    title: '',
+    description: '',
+    priority: 'medium',
+    category_id: ''
+  });
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
-  const [kbSuggestions, setKbSuggestions] = useState<KnowledgeBase[]>([]);
-  const [showKB, setShowKB] = useState(false);
-  const [error, setError] = useState<string>("");
-  
-  const { user, profile } = useAuth();
-  const { toast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchCategories();
-      if (profile?.full_name) {
-        setContactName(profile.full_name);
-      }
-      // Reset form
-      setTitle("");
-      setDescription("");
-      setPriority("medium");
-      setCategoryId("");
-      setKbSuggestions([]);
-      setShowKB(false);
-      setError("");
-    }
-  }, [isOpen, profile]);
+    loadCategories();
+  }, []);
 
-  // Auto-suggest dalla KB mentre l'utente scrive
-  useEffect(() => {
-    const searchTerm = title + " " + description;
-    if (searchTerm.trim().length > 3) {
-      searchKnowledgeBase(searchTerm.trim());
-    } else {
-      setKbSuggestions([]);
-      setShowKB(false);
-    }
-  }, [title, description]);
-
-  const searchKnowledgeBase = async (query: string) => {
-    try {
-      const suggestions = await automationService.getKBSuggestions(query);
-      setKbSuggestions(suggestions.slice(0, 3));
-      setShowKB(suggestions.length > 0);
-    } catch (error) {
-      console.error('Errore ricerca KB:', error);
-    }
-  };
-
-  const fetchCategories = async () => {
+  const loadCategories = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('categories')
@@ -86,305 +66,163 @@ const CreateTicketDialog = ({ isOpen, onClose, onTicketCreated }: CreateTicketDi
         .order('name');
 
       if (error) throw error;
+
       setCategories(data || []);
     } catch (error) {
-      console.error('Errore caricamento categorie:', error);
-      setError('Errore nel caricamento delle categorie');
-    }
-  };
-
-  const validateForm = () => {
-    if (!title.trim()) {
-      setError('Il titolo è obbligatorio');
-      return false;
-    }
-    if (!description.trim()) {
-      setError('La descrizione è obbligatoria');
-      return false;
-    }
-    if (!user) {
-      setError('Utente non autenticato');
-      return false;
-    }
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    
-    if (!validateForm()) return;
-
-    setLoading(true);
-    try {
-      const ticketData = {
-        title: title.trim(),
-        description: description.trim(),
-        priority,
-        category_id: categoryId || null,
-        contact_name: contactName || profile?.full_name || user!.email,
-        user_id: user!.id,
-        status: 'open' as const,
-        kb_suggestions: kbSuggestions.map(kb => ({
-          id: kb.id,
-          title: kb.title,
-          relevance: 'high'
-        }))
-      };
-
-      console.log('Creazione ticket con dati:', ticketData);
-
-      // Inserisci il ticket
-      const { data: ticket, error: ticketError } = await supabase
-        .from('tickets')
-        .insert(ticketData)
-        .select()
-        .single();
-
-      if (ticketError) {
-        console.error('Errore inserimento ticket:', ticketError);
-        throw new Error(`Errore creazione ticket: ${ticketError.message}`);
-      }
-
-      console.log('Ticket creato:', ticket);
-
-      // Log dei suggerimenti KB se presenti
-      if (kbSuggestions.length > 0) {
-        try {
-          await supabase
-            .from('automation_logs')
-            .insert({
-              ticket_id: ticket.id,
-              action_type: 'kb_suggestion',
-              action_details: {
-                suggestions_count: kbSuggestions.length,
-                suggestions: kbSuggestions.map(kb => kb.title)
-              }
-            });
-        } catch (logError) {
-          console.error('Errore log KB suggestions:', logError);
-          // Non bloccare per errori di log
-        }
-      }
-
-      // Invia email di conferma automatica
-      try {
-        await supabase.functions.invoke('send-ticket-confirmation-email', {
-          body: { 
-            ticketId: ticket.id,
-            userEmail: user!.email,
-            ticketTitle: title,
-            ticketNumber: ticket.id.substring(0, 8).toUpperCase(),
-            priority: priority,
-            contactName: contactName || profile?.full_name || user!.email
-          }
-        });
-        
-        // Aggiorna il flag response_sent
-        await supabase
-          .from('tickets')
-          .update({ response_sent: true })
-          .eq('id', ticket.id);
-
-      } catch (emailError) {
-        console.error('Errore invio email conferma:', emailError);
-        // Non bloccare la creazione del ticket per errori email
-      }
-
-      toast({
-        title: "Ticket creato!",
-        description: `Il ticket #${ticket.id.substring(0, 8).toUpperCase()} è stato creato con successo. ${kbSuggestions.length > 0 ? 'Controlla i suggerimenti dalla knowledge base.' : ''}`,
-      });
-
-      // Reset form
-      setTitle("");
-      setDescription("");
-      setPriority("medium");
-      setCategoryId("");
-      setContactName("");
-      setKbSuggestions([]);
-      setShowKB(false);
-      
-      onTicketCreated();
-      onClose();
-    } catch (error: any) {
-      console.error('Errore creazione ticket:', error);
-      setError(error.message || "Impossibile creare il ticket. Riprova.");
-      toast({
-        title: "Errore",
-        description: error.message || "Impossibile creare il ticket. Riprova.",
-        variant: "destructive"
-      });
+      console.error('Errore nel caricamento delle categorie:', error);
+      toast.error('Errore nel caricamento delle categorie');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKbSuggestionClick = (article: KnowledgeBase) => {
-    // Mostra il contenuto dell'articolo in un toast o dialog
-    toast({
-      title: article.title,
-      description: article.content.replace(/<[^>]*>/g, '').substring(0, 200) + "...",
-      duration: 10000,
-    });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim() || !formData.description.trim()) {
+      toast.error('Titolo e descrizione sono obbligatori');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Utente non autenticato');
+
+      // Crea il ticket
+      const { data: ticket, error } = await supabase
+        .from('tickets')
+        .insert({
+          ...formData,
+          user_id: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Ticket creato con successo');
+
+      // Genera suggerimenti automatici in background
+      setTimeout(async () => {
+        try {
+          await automationService.generateSmartSuggestions(
+            ticket.id,
+            `${formData.title} ${formData.description}`
+          );
+          console.log('Suggerimenti automatici generati per il ticket:', ticket.id);
+        } catch (error) {
+          console.error('Errore nella generazione suggerimenti automatici:', error);
+        }
+      }, 1000);
+
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'medium',
+        category_id: ''
+      });
+
+      onTicketCreated?.();
+      onClose();
+    } catch (error) {
+      console.error('Errore nella creazione del ticket:', error);
+      toast.error('Errore nella creazione del ticket');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Crea Nuovo Ticket</DialogTitle>
-          <DialogDescription>
-            Compila i dettagli del problema. Il sistema suggerirà automaticamente soluzioni dalla knowledge base.
-          </DialogDescription>
         </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="title">Titolo *</Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              placeholder="Descrivi brevemente il problema..."
+              required
+            />
+          </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-            <div className="flex items-center gap-2 text-red-800">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">{error}</span>
+          <div>
+            <Label htmlFor="description">Descrizione *</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Fornisci dettagli sul problema, inclusi codici negozio, indirizzi IP o altre informazioni utili..."
+              rows={4}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="priority">Priorità</Label>
+              <Select
+                value={formData.priority}
+                onValueChange={(value) => setFormData(prev => ({ 
+                  ...prev, 
+                  priority: value as 'low' | 'medium' | 'high' | 'urgent' 
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Bassa</SelectItem>
+                  <SelectItem value="medium">Media</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                  <SelectItem value="urgent">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="category">Categoria</Label>
+              <Select
+                value={formData.category_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleziona categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="contact-name">Nome Contatto</Label>
-                  <Input
-                    id="contact-name"
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    placeholder="Il tuo nome"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="priority">Priorità</Label>
-                  <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Bassa</SelectItem>
-                      <SelectItem value="medium">Media</SelectItem>
-                      <SelectItem value="high">Alta</SelectItem>
-                      <SelectItem value="urgent">Urgente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="category">Categoria</Label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleziona categoria (opzionale)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: category.color }}
-                          />
-                          {category.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="title">Oggetto *</Label>
-                <Input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Breve descrizione del problema"
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descrizione *</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrivi il problema in dettaglio"
-                  className="min-h-32"
-                  required
-                />
-              </div>
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Annulla
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Crea Ticket
-                </Button>
-              </DialogFooter>
-            </form>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Annulla
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting}
+            >
+              {submitting ? 'Creazione...' : 'Crea Ticket'}
+            </Button>
           </div>
-
-          {/* Knowledge Base Suggestions */}
-          <div className="lg:col-span-1">
-            {showKB && kbSuggestions.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Lightbulb className="h-4 w-4 text-yellow-500" />
-                  Soluzioni Suggerite
-                </div>
-                
-                <div className="space-y-3">
-                  {kbSuggestions.map((suggestion) => (
-                    <div 
-                      key={suggestion.id}
-                      className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => handleKbSuggestionClick(suggestion)}
-                    >
-                      <h4 className="font-medium text-sm mb-1">{suggestion.title}</h4>
-                      <p className="text-xs text-muted-foreground line-clamp-3">
-                        {suggestion.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
-                      </p>
-                      
-                      {suggestion.keywords.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {suggestion.keywords.slice(0, 3).map((keyword, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {keyword}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <p className="text-xs text-center text-muted-foreground">
-                  💡 Clicca su un suggerimento per vedere la soluzione completa
-                </p>
-              </div>
-            )}
-
-            {!showKB && (
-              <div className="p-4 border rounded-lg text-center text-muted-foreground">
-                <Lightbulb className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">
-                  Inizia a scrivere il problema per ricevere suggerimenti automatici dalla knowledge base
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

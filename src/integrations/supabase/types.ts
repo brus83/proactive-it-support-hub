@@ -320,6 +320,45 @@ export type Database = {
           },
         ]
       }
+      store_locations: {
+        Row: {
+          additional_info: Json | null
+          address: string | null
+          city: string | null
+          created_at: string
+          id: string
+          ip_range: string
+          is_active: boolean
+          store_code: string | null
+          store_name: string
+          updated_at: string
+        }
+        Insert: {
+          additional_info?: Json | null
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          ip_range: string
+          is_active?: boolean
+          store_code?: string | null
+          store_name: string
+          updated_at?: string
+        }
+        Update: {
+          additional_info?: Json | null
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          ip_range?: string
+          is_active?: boolean
+          store_code?: string | null
+          store_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tickets: {
         Row: {
           ai_analysis: Json | null
@@ -432,6 +471,38 @@ export type Database = {
         Args: { ticket_id: string; category_name: string }
         Returns: string
       }
+      get_store_suggestions: {
+        Args: { search_text: string }
+        Returns: {
+          id: string
+          store_code: string
+          store_name: string
+          ip_range: string
+          address: string
+          city: string
+          relevance_score: number
+        }[]
+      }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
       has_role: {
         Args: {
           _user_id: string
@@ -442,6 +513,18 @@ export type Database = {
       is_admin_or_tech: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
       }
     }
     Enums: {

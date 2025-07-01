@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { storeService } from "./storeService";
 
 export interface AutomationLog {
   id: string;
@@ -270,6 +271,129 @@ class AutomationService {
       commonIssues: ['Password Reset', 'Printer Issues', 'Network Problems'],
       resolutionTrends: []
     };
+  }
+
+  async generateSmartSuggestions(ticketId: string, ticketText: string): Promise<{
+    storeSuggestions: any[];
+    kbSuggestions: any[];
+    automatedActions: string[];
+  }> {
+    try {
+      // Suggerimenti negozi
+      const storeSuggestions = await storeService.getStoreSuggestions(ticketText);
+      const extractedInfo = storeService.extractStoreInfo(ticketText);
+      
+      // Arricchisci i suggerimenti con informazioni estratte
+      const enrichedStoreSuggestions = [];
+      
+      // Aggiungi negozi trovati per codice
+      for (const code of extractedInfo.possibleStoreCodes) {
+        const store = await storeService.getStoreByCode(code);
+        if (store) {
+          enrichedStoreSuggestions.push({
+            ...store,
+            matchType: 'exact_code',
+            matchValue: code,
+            confidence: 1.0
+          });
+        }
+      }
+      
+      // Aggiungi negozi trovati per IP
+      for (const ip of extractedInfo.possibleIPs) {
+        const store = await storeService.getStoreByIpRange(ip);
+        if (store) {
+          enrichedStoreSuggestions.push({
+            ...store,
+            matchType: 'ip_range',
+            matchValue: ip,
+            confidence: 0.9
+          });
+        }
+      }
+
+      // Suggerimenti knowledge base
+      const kbSuggestions = await this.getKBSuggestions(ticketText);
+
+      // Azioni automatiche suggerite
+      const automatedActions = this.generateAutomatedActions(ticketText, extractedInfo);
+
+      // Salva i suggerimenti nel ticket
+      await supabase
+        .from('tickets')
+        .update({
+          kb_suggestions: {
+            stores: enrichedStoreSuggestions,
+            knowledgeBase: kbSuggestions,
+            actions: automatedActions,
+            generated_at: new Date().toISOString()
+          }
+        })
+        .eq('id', ticketId);
+
+      // Log dell'azione
+      await supabase
+        .from('automation_logs')
+        .insert({
+          ticket_id: ticketId,
+          action_type: 'kb_suggestion',
+          action_details: {
+            store_suggestions_count: enrichedStoreSuggestions.length,
+            kb_suggestions_count: kbSuggestions.length,
+            actions_count: automatedActions.length
+          }
+        });
+
+      return {
+        storeSuggestions: enrichedStoreSuggestions,
+        kbSuggestions,
+        automatedActions
+      };
+
+    } catch (error) {
+      console.error('Errore nella generazione suggerimenti:', error);
+      return {
+        storeSuggestions: [],
+        kbSuggestions: [],
+        automatedActions: []
+      };
+    }
+  }
+
+  private generateAutomatedActions(ticketText: string, extractedInfo: any): string[] {
+    const actions = [];
+    const lowerText = ticketText.toLowerCase();
+
+    // Azioni basate su parole chiave
+    if (lowerText.includes('password') || lowerText.includes('accesso')) {
+      actions.push('Verificare credenziali utente');
+      actions.push('Controllare se l\'account è bloccato');
+    }
+
+    if (lowerText.includes('stampante') || lowerText.includes('stampa')) {
+      actions.push('Verificare connessione stampante');
+      actions.push('Controllare coda di stampa');
+      actions.push('Verificare driver stampante');
+    }
+
+    if (lowerText.includes('rete') || lowerText.includes('internet') || lowerText.includes('connessione')) {
+      actions.push('Testare connettività di rete');
+      actions.push('Verificare configurazione IP');
+      if (extractedInfo.possibleIPs.length > 0) {
+        actions.push(`Controllare IP: ${extractedInfo.possibleIPs.join(', ')}`);
+      }
+    }
+
+    if (lowerText.includes('lento') || lowerText.includes('performance')) {
+      actions.push('Verificare utilizzo CPU e memoria');
+      actions.push('Controllare spazio disco');
+    }
+
+    if (extractedInfo.possibleStoreCodes.length > 0) {
+      actions.push(`Contattare negozio ${extractedInfo.possibleStoreCodes.join(', ')}`);
+    }
+
+    return actions;
   }
 }
 

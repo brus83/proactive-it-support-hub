@@ -1,21 +1,35 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, User, Tag, MessageSquare, Send, X } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Clock, User, Tag, MessageSquare, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
+import StoreSuggestionsWidget from "./StoreSuggestionsWidget";
 
-interface TicketDetailDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  ticketId: string;
-  onTicketUpdated?: () => void;
+interface Comment {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  user?: {
+    full_name: string | null;
+    email: string;
+  };
+}
+
+interface Category {
+  id: string;
+  name: string;
+  color: string;
 }
 
 interface TicketDetail {
@@ -24,413 +38,333 @@ interface TicketDetail {
   description: string;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  category_id: string | null;
+  category?: Category | null;
+  user_id: string;
+  user?: {
+    full_name: string | null;
+    email: string;
+  };
+  assigned_to: string | null;
+  assigned_user?: {
+    full_name: string | null;
+  };
   created_at: string;
   updated_at: string;
-  contact_name?: string;
-  assigned_to?: string;
-  resolution_notes?: string;
-  categories?: {
-    name: string;
-    color: string;
-  };
-  assigned_user?: {
-    full_name: string;
-  };
-  creator?: {
-    full_name: string;
-  };
+  comments?: Comment[];
+  resolved_at: string | null;
 }
 
-interface Comment {
-  id: string;
-  content: string;
-  created_at: string;
-  author: {
-    full_name: string;
-    role: string;
-  };
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "open": return "bg-green-100 text-green-800 border-green-200";
+    case "in_progress": return "bg-blue-100 text-blue-800 border-blue-200";
+    case "resolved": return "bg-gray-100 text-gray-800 border-gray-200";
+    case "closed": return "bg-gray-100 text-gray-800 border-gray-200";
+    default: return "bg-gray-100 text-gray-800 border-gray-200";
+  }
+};
+
+const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case "high": return "bg-red-100 text-red-800 border-red-200";
+    case "medium": return "bg-orange-100 text-orange-800 border-orange-200";
+    case "low": return "bg-gray-100 text-gray-800 border-gray-200";
+    case "urgent": return "bg-red-500 text-white border-red-600";
+    default: return "bg-gray-100 text-gray-800 border-gray-200";
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case "open": return "Aperto";
+    case "in_progress": return "In Lavorazione";
+    case "resolved": return "Risolto";
+    case "closed": return "Chiuso";
+    default: return status;
+  }
+};
+
+const getPriorityText = (priority: string) => {
+  switch (priority) {
+    case "high": return "Alta";
+    case "medium": return "Media";
+    case "low": return "Bassa";
+    case "urgent": return "Urgente";
+    default: return priority;
+  }
+};
+
+const formatDate = (date: Date) => {
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+};
+
+interface TicketDetailDialogProps {
+  ticketId: string | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onTicketUpdated?: () => void;
 }
 
-const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: TicketDetailDialogProps) => {
+const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
+  ticketId,
+  isOpen,
+  onClose,
+  onTicketUpdated
+}) => {
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [newStatus, setNewStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  
-  const { profile } = useAuth();
-  const { toast } = useToast();
+  const [comment, setComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
-    if (isOpen && ticketId) {
-      fetchTicketDetails();
+    if (ticketId && isOpen) {
+      loadTicketDetails();
     }
-  }, [isOpen, ticketId]);
+  }, [ticketId, isOpen]);
 
-  const fetchTicketDetails = async () => {
+  const loadTicketDetails = async () => {
     setLoading(true);
     try {
       const { data: ticketData, error: ticketError } = await supabase
         .from('tickets')
         .select(`
           *,
-          categories (name, color),
-          assigned_user:profiles!tickets_assigned_to_fkey (full_name),
-          creator:profiles!tickets_user_id_fkey (full_name)
+          category:category_id (id, name, color),
+          user:user_id (id, full_name, email),
+          assigned_user:assigned_to (id, full_name)
         `)
         .eq('id', ticketId)
         .single();
 
       if (ticketError) throw ticketError;
 
-      setTicket(ticketData as any);
-      setNewStatus(ticketData.status);
+      const { data: commentsData, error: commentsError } = await supabase
+        .from('comments')
+        .select(`
+          *,
+          user:user_id (id, full_name, email)
+        `)
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false });
 
-      // Per ora simuliamo i commenti, in futuro si potrebbe aggiungere una tabella comments
-      setComments([]);
+      if (commentsError) throw commentsError;
+
+      setTicket({
+        ...ticketData,
+        comments: commentsData || []
+      } as TicketDetail);
     } catch (error) {
-      console.error('Errore caricamento dettagli ticket:', error);
-      toast({
-        title: "Errore",
-        description: "Impossibile caricare i dettagli del ticket",
-        variant: "destructive"
-      });
+      console.error('Errore nel caricamento dei dettagli del ticket:', error);
+      toast.error('Errore nel caricamento dei dettagli del ticket');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusUpdate = async () => {
-    if (!ticket || newStatus === ticket.status) return;
-
-    setSubmitting(true);
-    try {
-      const updateData: any = {
-        status: newStatus,
-        updated_at: new Date().toISOString()
-      };
-
-      if (newStatus === 'resolved' && !ticket.resolution_notes) {
-        updateData.resolved_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from('tickets')
-        .update(updateData)
-        .eq('id', ticketId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Stato aggiornato",
-        description: `Il ticket è ora: ${getStatusText(newStatus as any)}`,
-      });
-
-      await fetchTicketDetails();
-      if (onTicketUpdated) onTicketUpdated();
-    } catch (error) {
-      console.error('Errore aggiornamento stato:', error);
-      toast({
-        title: "Errore",
-        description: "Impossibile aggiornare lo stato del ticket",
-        variant: "destructive"
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
+    if (!comment.trim() || !ticket) return;
 
-    // Per ora aggiungiamo solo una nota al ticket
-    setSubmitting(true);
+    setSubmittingComment(true);
     try {
-      const currentNotes = ticket?.resolution_notes || '';
-      const timestamp = new Date().toLocaleString('it-IT');
-      const authorName = profile?.full_name || 'Utente';
-      const newNote = `[${timestamp}] ${authorName}: ${newComment.trim()}`;
-      const updatedNotes = currentNotes ? `${currentNotes}\n\n${newNote}` : newNote;
-
       const { error } = await supabase
-        .from('tickets')
-        .update({
-          resolution_notes: updatedNotes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', ticketId);
+        .from('comments')
+        .insert({
+          ticket_id: ticket.id,
+          content: comment,
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        });
 
       if (error) throw error;
 
-      setNewComment("");
-      toast({
-        title: "Commento aggiunto",
-        description: "Il commento è stato aggiunto al ticket",
-      });
-
-      await fetchTicketDetails();
-      if (onTicketUpdated) onTicketUpdated();
+      toast.success('Commento aggiunto con successo');
+      setComment('');
+      loadTicketDetails();
     } catch (error) {
-      console.error('Errore aggiunta commento:', error);
-      toast({
-        title: "Errore",
-        description: "Impossibile aggiungere il commento",
-        variant: "destructive"
-      });
+      console.error('Errore nell\'aggiunta del commento:', error);
+      toast.error('Errore nell\'aggiunta del commento');
     } finally {
-      setSubmitting(false);
+      setSubmittingComment(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "open": return "Aperto";
-      case "in_progress": return "In Lavorazione";
-      case "resolved": return "Risolto";
-      case "closed": return "Chiuso";
-      default: return status;
+  const handleResolveTicket = async () => {
+    if (!ticket) return;
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ 
+          status: 'resolved',
+          resolved_at: new Date().toISOString()
+        })
+        .eq('id', ticket.id);
+
+      if (error) throw error;
+
+      toast.success('Ticket risolto con successo');
+      onTicketUpdated?.();
+      onClose();
+    } catch (error) {
+      console.error('Errore nella risoluzione del ticket:', error);
+      toast.error('Errore nella risoluzione del ticket');
     }
   };
 
-  const getPriorityText = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "Urgente";
-      case "high": return "Alta";
-      case "medium": return "Media";
-      case "low": return "Bassa";
-      default: return priority;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "open": return "bg-yellow-100 text-yellow-800";
-      case "in_progress": return "bg-blue-100 text-blue-800";
-      case "resolved": return "bg-green-100 text-green-800";
-      case "closed": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "bg-red-100 text-red-800";
-      case "high": return "bg-red-100 text-red-800";
-      case "medium": return "bg-orange-100 text-orange-800";
-      case "low": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  if (loading) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  if (!ticket) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Errore</DialogTitle>
-            <DialogDescription>
-              Impossibile caricare i dettagli del ticket.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={onClose}>Chiudi</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  const canEdit = profile?.role === 'admin' || profile?.role === 'technician' || ticket.assigned_to === profile?.id;
+  if (!isOpen || !ticketId) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span>Ticket #{ticket.id.substring(0, 8).toUpperCase()}</span>
-            <Badge className={getStatusColor(ticket.status)}>
-              {getStatusText(ticket.status)}
-            </Badge>
+            <Tag className="w-5 h-5" />
+            Dettagli Ticket #{ticketId.substring(0, 8).toUpperCase()}
           </DialogTitle>
-          <DialogDescription>
-            Dettagli e gestione del ticket
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Dettagli principali */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{ticket.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground whitespace-pre-wrap">
-                  {ticket.description}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Note e commenti */}
-            {ticket.resolution_notes && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Note e Commenti
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="whitespace-pre-wrap text-sm">
-                    {ticket.resolution_notes}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Aggiungi commento */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Aggiungi Commento</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="comment">Nuovo Commento</Label>
-                  <Textarea
-                    id="comment"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Scrivi un commento o aggiornamento..."
-                    className="min-h-24"
-                  />
-                </div>
-                <Button 
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || submitting}
-                  className="w-full"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {submitting ? "Invio..." : "Aggiungi Commento"}
-                </Button>
-              </CardContent>
-            </Card>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="text-muted-foreground">Caricamento...</div>
           </div>
-
-          {/* Sidebar con informazioni */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Informazioni Ticket</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Priorità</Label>
-                  <div className="mt-1">
+        ) : ticket ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Colonna principale - Dettagli ticket */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Header del ticket */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">{ticket.title}</h2>
+                  <div className="flex gap-2">
+                    <Badge className={getStatusColor(ticket.status)}>
+                      {getStatusText(ticket.status)}
+                    </Badge>
                     <Badge className={getPriorityColor(ticket.priority)}>
                       {getPriorityText(ticket.priority)}
                     </Badge>
                   </div>
                 </div>
 
-                <div>
-                  <Label className="text-sm font-medium">Categoria</Label>
-                  <div className="mt-1">
-                    <Badge variant="outline">
-                      {ticket.categories?.name || 'Non categorizzato'}
-                    </Badge>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4" />
+                    <span>Creato da: {ticket.user?.full_name || ticket.user?.email}</span>
                   </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Creato da</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {ticket.contact_name || ticket.creator?.full_name || 'Sconosciuto'}
-                  </p>
-                </div>
-
-                {ticket.assigned_user && (
-                  <div>
-                    <Label className="text-sm font-medium">Assegnato a</Label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {ticket.assigned_user.full_name}
-                    </p>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4" />
+                    <span>Creato: {formatDate(new Date(ticket.created_at))}</span>
                   </div>
-                )}
-
-                <div>
-                  <Label className="text-sm font-medium">Data Creazione</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {new Date(ticket.created_at).toLocaleString('it-IT')}
-                  </p>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Ultimo Aggiornamento</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {new Date(ticket.updated_at).toLocaleString('it-IT')}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Gestione stato (solo per admin/tecnici) */}
-            {canEdit && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gestione Stato</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="status">Cambia Stato</Label>
-                    <Select value={newStatus} onValueChange={setNewStatus}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">Aperto</SelectItem>
-                        <SelectItem value="in_progress">In Lavorazione</SelectItem>
-                        <SelectItem value="resolved">Risolto</SelectItem>
-                        {profile?.role === 'admin' && (
-                          <SelectItem value="closed">Chiuso</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {newStatus !== ticket.status && (
-                    <Button 
-                      onClick={handleStatusUpdate}
-                      disabled={submitting}
-                      className="w-full"
-                    >
-                      {submitting ? "Aggiornamento..." : "Aggiorna Stato"}
-                    </Button>
+                  {ticket.assigned_to && (
+                    <div className="flex items-center space-x-2">
+                      <User className="w-4 h-4" />
+                      <span>Assegnato a: {ticket.assigned_user?.full_name}</span>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+                  {ticket.category && (
+                    <div className="flex items-center space-x-2">
+                      <Tag className="w-4 h-4" />
+                      <span>Categoria: {ticket.category.name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            <X className="w-4 h-4 mr-2" />
-            Chiudi
-          </Button>
-        </DialogFooter>
+              <Separator />
+
+              {/* Descrizione */}
+              <div>
+                <h3 className="font-medium mb-2">Descrizione</h3>
+                <div className="bg-muted p-4 rounded-lg">
+                  <p className="whitespace-pre-wrap">{ticket.description}</p>
+                </div>
+              </div>
+
+              {/* Commenti */}
+              <div>
+                <h3 className="font-medium mb-2 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Commenti
+                </h3>
+                
+                <div className="space-y-3 mb-4">
+                  {ticket.comments?.map((comment) => (
+                    <div key={comment.id} className="bg-muted p-3 rounded-lg">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-sm">
+                          {comment.user?.full_name || 'Utente sconosciuto'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(new Date(comment.created_at))}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                    </div>
+                  ))}
+                  
+                  {!ticket.comments?.length && (
+                    <p className="text-muted-foreground text-sm">Nessun commento ancora.</p>
+                  )}
+                </div>
+
+                {/* Aggiungi commento */}
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Aggiungi un commento..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleAddComment}
+                      disabled={!comment.trim() || submittingComment}
+                      size="sm"
+                    >
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Aggiungi Commento
+                    </Button>
+                    
+                    {ticket.status !== 'resolved' && (
+                      <Button 
+                        onClick={handleResolveTicket}
+                        variant="outline"
+                        size="sm"
+                        className="text-green-600 border-green-600 hover:bg-green-50"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Risolvi Ticket
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar - Widget di supporto */}
+            <div className="space-y-4">
+              {/* Widget suggerimenti negozi */}
+              <StoreSuggestionsWidget 
+                ticketTitle={ticket.title}
+                ticketDescription={ticket.description}
+              />
+              
+              {/* Widget knowledge base */}
+              <KnowledgeBaseWidget 
+                searchQuery={`${ticket.title} ${ticket.description}`}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="text-muted-foreground">Ticket non trovato</div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
