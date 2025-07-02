@@ -14,16 +14,36 @@ export interface StoreLocation {
 
 class StoreService {
   async getStoreSuggestions(searchText: string): Promise<StoreLocation[]> {
-    const { data, error } = await supabase
-      .rpc('get_store_suggestions', { search_text: searchText });
+    try {
+      // Pulisce il testo di ricerca
+      const cleanSearchText = searchText
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, ' ')
+        .replace(/\t/g, ' ')
+        .trim()
+        .substring(0, 50); // Limita la lunghezza
 
-    if (error) {
-      console.error('Errore nel recupero suggerimenti negozi:', error);
+      if (!cleanSearchText || cleanSearchText.length < 2) {
+        console.log('Testo di ricerca troppo breve o vuoto');
+        return [];
+      }
+
+      console.log('Ricerca negozi con testo:', cleanSearchText);
+
+      const { data, error } = await supabase
+        .rpc('get_store_suggestions', { search_text: cleanSearchText });
+
+      if (error) {
+        console.error('Errore nel recupero suggerimenti negozi:', error);
+        return [];
+      }
+
+      console.log('Suggerimenti negozi trovati:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('Errore in getStoreSuggestions:', error);
       return [];
     }
-
-    // Ora la funzione RPC restituisce già is_active
-    return data || [];
   }
 
   async getStoreByCode(storeCode: string): Promise<StoreLocation | null> {
@@ -43,7 +63,6 @@ class StoreService {
   }
 
   async getStoreByIpRange(ipAddress: string): Promise<StoreLocation | null> {
-    // Cerca il negozio che contiene l'IP fornito
     const { data, error } = await supabase
       .from('store_locations')
       .select('*')
@@ -54,13 +73,11 @@ class StoreService {
       return null;
     }
 
-    // Trova il negozio che contiene l'IP (logica semplificata)
     const store = data?.find(store => {
       const baseIp = store.ip_range.split('/')[0];
       const baseIpParts = baseIp.split('.');
       const inputIpParts = ipAddress.split('.');
       
-      // Confronta i primi 3 ottetti
       return baseIpParts[0] === inputIpParts[0] &&
              baseIpParts[1] === inputIpParts[1] &&
              baseIpParts[2] === inputIpParts[2];
@@ -84,7 +101,6 @@ class StoreService {
     return data || [];
   }
 
-  // Analizza il testo del ticket per estrarre informazioni rilevanti
   extractStoreInfo(ticketText: string): {
     possibleStoreCodes: string[];
     possibleIPs: string[];
@@ -92,15 +108,12 @@ class StoreService {
   } {
     const text = ticketText.toLowerCase();
     
-    // Cerca codici negozio (pattern: 3-4 caratteri alfanumerici)
     const storeCodePattern = /\b[0-9][a-z0-9]{1,3}\b/gi;
     const possibleStoreCodes = ticketText.match(storeCodePattern) || [];
 
-    // Cerca indirizzi IP
     const ipPattern = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
     const possibleIPs = ticketText.match(ipPattern) || [];
 
-    // Cerca nomi di città italiane comuni
     const italianCities = [
       'roma', 'milano', 'napoli', 'torino', 'palermo', 'genova', 'bologna', 
       'firenze', 'bari', 'catania', 'venezia', 'verona', 'messina', 'padova',

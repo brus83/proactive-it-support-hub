@@ -46,11 +46,26 @@ class AutomationService {
         return [];
       }
 
+      // Pulisce il testo di ricerca da caratteri speciali che causano errori SQL
+      const cleanSearchText = searchText
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, ' ')
+        .replace(/\t/g, ' ')
+        .replace(/[%_]/g, ' ')
+        .trim()
+        .substring(0, 100); // Limita la lunghezza
+
+      if (!cleanSearchText || cleanSearchText.length < 2) {
+        return [];
+      }
+
+      console.log('Ricerca KB con testo pulito:', cleanSearchText);
+
       const { data, error } = await supabase
         .from('knowledge_base')
         .select('*')
         .eq('is_published', true)
-        .or(`title.ilike.%${searchText}%,content.ilike.%${searchText}%`)
+        .or(`title.ilike.%${cleanSearchText}%,content.ilike.%${cleanSearchText}%`)
         .limit(10);
 
       if (error) {
@@ -58,6 +73,7 @@ class AutomationService {
         throw error;
       }
 
+      console.log('Risultati KB trovati:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('Errore in getKBSuggestions:', error);
@@ -99,7 +115,6 @@ class AutomationService {
 
     if (error) throw error;
     
-    // Correzione: Assicurarsi che priority sia del tipo corretto
     const allowedPriorities = ["low", "medium", "high", "urgent"] as const;
     const allowedRoles = ["technician", "admin"] as const;
 
@@ -114,7 +129,6 @@ class AutomationService {
     const rules = await this.getEscalationRules();
 
     for (const rule of rules) {
-      // Correzione: Rimuovere .sql che non esiste in Supabase client
       const { data: tickets } = await supabase
         .from('tickets')
         .select('*')
@@ -176,7 +190,6 @@ class AutomationService {
 
     if (error) throw error;
 
-    // Correzione: Assicurarsi che action_type sia del tipo corretto
     const allowedActionTypes = ["auto_assign", "auto_categorize", "escalation", "auto_response", "kb_suggestion"] as const;
 
     return (data || []).map(log => ({
@@ -194,7 +207,6 @@ class AutomationService {
 
     if (error) throw error;
     
-    // Correzione: Assicurarsi che intervention_type sia del tipo corretto
     const allowedTypes = ["remote", "on_site", "phone"] as const;
     const allowedStatuses = ["scheduled", "in_progress", "completed", "cancelled"] as const;
     
@@ -222,7 +234,6 @@ class AutomationService {
 
     if (error) throw error;
 
-    // Correzione: Assicurarsi che intervention_type sia del tipo corretto
     const allowedTypes = ["remote", "on_site", "phone"] as const;
     const allowedStatuses = ["scheduled", "in_progress", "completed", "cancelled"] as const;
 
@@ -301,19 +312,11 @@ class AutomationService {
     try {
       console.log('Generazione suggerimenti intelligenti per ticket:', ticketId);
 
-      // Ottieni suggerimenti dai negozi
       const storeSuggestions = await storeService.getStoreSuggestions(ticketText);
-      
-      // Ottieni suggerimenti dalla knowledge base
       const kbSuggestions = await this.getKBSuggestions(ticketText);
-
-      // Estrai informazioni dal testo
       const extractedInfo = storeService.extractStoreInfo(ticketText);
-
-      // Genera azioni suggerite
       const actions = this.generateActionSuggestions(ticketText, extractedInfo);
 
-      // Converti in oggetto serializzabile per JSON
       const suggestions = {
         stores: storeSuggestions.map(store => ({
           id: store.id,
@@ -333,7 +336,6 @@ class AutomationService {
         generated_at: new Date().toISOString()
       };
 
-      // Salva i suggerimenti nel ticket
       const { error } = await supabase
         .from('tickets')
         .update({ 
@@ -346,7 +348,6 @@ class AutomationService {
         return;
       }
 
-      // Log dell'azione
       await supabase
         .from('automation_logs')
         .insert({
@@ -363,7 +364,6 @@ class AutomationService {
     } catch (error) {
       console.error('Errore nella generazione suggerimenti intelligenti:', error);
       
-      // Log dell'errore
       await supabase
         .from('automation_logs')
         .insert({
@@ -380,7 +380,6 @@ class AutomationService {
     const actions = [];
     const lowerText = ticketText.toLowerCase();
 
-    // Azioni basate su parole chiave
     if (lowerText.includes('password') || lowerText.includes('accesso')) {
       actions.push('Verificare credenziali utente');
       actions.push('Controllare se l\'account è bloccato');
