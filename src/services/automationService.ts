@@ -313,12 +313,26 @@ class AutomationService {
     try {
       console.log('Generazione suggerimenti intelligenti per ticket:', ticketId);
 
+      // Genera suggerimenti ML dai ticket risolti
+      const { mlKnowledgeService } = await import('./mlKnowledgeService');
+      const mlSuggestions = await mlKnowledgeService.generateMLSuggestions(
+        ticketText.split('\n')[0] || '', // Usa la prima riga come titolo
+        ticketText
+      );
+
       const storeSuggestions = await storeService.getStoreSuggestions(ticketText);
       const kbSuggestions = await this.getKBSuggestions(ticketText);
       const extractedInfo = storeService.extractStoreInfo(ticketText);
       const actions = this.generateActionSuggestions(ticketText, extractedInfo);
 
       const suggestions = {
+        mlSuggestions: mlSuggestions.map(ml => ({
+          id: ml.suggestion_id,
+          suggested_solution: ml.suggested_solution,
+          confidence_score: ml.confidence_score,
+          source_tickets: ml.source_tickets,
+          keywords: ml.keywords
+        })),
         stores: storeSuggestions.map(store => ({
           id: store.id,
           store_name: store.store_name,
@@ -355,7 +369,9 @@ class AutomationService {
           ticket_id: ticketId,
           action_type: 'kb_suggestion',
           action_details: {
-            suggestions_count: storeSuggestions.length + kbSuggestions.length,
+            ml_suggestions_count: mlSuggestions.length,
+            store_suggestions_count: storeSuggestions.length,
+            kb_suggestions_count: kbSuggestions.length,
             actions_count: actions.length
           },
           success: true
@@ -370,7 +386,7 @@ class AutomationService {
         .insert({
           ticket_id: ticketId,
           action_type: 'kb_suggestion',
-          action_details: { error: 'Failed to generate suggestions' },
+          action_details: { error: 'Failed to generate ML suggestions' },
           success: false,
           error_message: error instanceof Error ? error.message : 'Unknown error'
         });

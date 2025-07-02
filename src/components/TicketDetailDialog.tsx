@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -15,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
 import StoreSuggestionsWidget from "./StoreSuggestionsWidget";
+import MLSuggestionsWidget from "./MLSuggestionsWidget";
 
 interface Comment {
   id: string;
@@ -240,6 +240,11 @@ const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
     }
   };
 
+  const handleApplySuggestion = (suggestion: string) => {
+    setComment(suggestion);
+    toast.success('Suggerimento applicato al commento');
+  };
+
   if (!isOpen || !ticketId) return null;
 
   return (
@@ -335,13 +340,13 @@ const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
                   )}
                 </div>
 
-                {/* Aggiungi commento */}
+                {/* Aggiungi commento con suggerimenti ML */}
                 <div className="space-y-2">
                   <Textarea
                     placeholder="Aggiungi un commento..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    rows={3}
+                    rows={5}
                   />
                   <div className="flex gap-2">
                     <Button 
@@ -371,6 +376,15 @@ const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
 
             {/* Sidebar - Widget di supporto */}
             <div className="space-y-4">
+              {/* Widget suggerimenti ML */}
+              <MLSuggestionsWidget 
+                ticketTitle={ticket.title}
+                ticketDescription={ticket.description}
+                ticketId={ticket.id}
+                onSuggestionApply={handleApplySuggestion}
+                compact={true}
+              />
+              
               {/* Widget suggerimenti negozi */}
               <StoreSuggestionsWidget 
                 ticketTitle={ticket.title}
