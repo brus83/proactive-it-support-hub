@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ThumbsUp, ThumbsDown, Brain, Lightbulb, TrendingUp, RefreshCw } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Brain, Lightbulb, TrendingUp, RefreshCw, Bug } from "lucide-react";
 import { mlKnowledgeService, MLSuggestion } from "@/services/mlKnowledgeService";
 import { useToast } from "@/hooks/use-toast";
 import SafeHtmlRenderer from "./SafeHtmlRenderer";
@@ -28,10 +28,12 @@ const MLSuggestionsWidget = ({
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (ticketTitle && ticketDescription) {
+      console.log('MLWidget: Caricamento automatico per nuovo ticket:', ticketTitle);
       loadMLSuggestions();
     }
   }, [ticketTitle, ticketDescription]);
@@ -44,23 +46,39 @@ const MLSuggestionsWidget = ({
     setLoading(true);
     setError(null);
     try {
-      console.log('MLWidget: Caricamento suggerimenti ML per:', ticketTitle);
+      console.log('MLWidget: === INIZIO CARICAMENTO SUGGERIMENTI ===');
+      console.log('MLWidget: Titolo ticket:', ticketTitle);
+      console.log('MLWidget: Descrizione ticket:', ticketDescription.substring(0, 100));
+      
       const suggestions = await mlKnowledgeService.generateMLSuggestions(
         ticketTitle, 
         ticketDescription
       );
       
-      console.log('MLWidget: Suggerimenti ML ricevuti:', suggestions.length);
+      console.log('MLWidget: ✅ Suggerimenti ML ricevuti:', suggestions.length);
       setSuggestions(suggestions);
       
       if (suggestions.length === 0) {
-        setError("Nessun suggerimento trovato. Il sistema ML impara dai ticket risolti - più ticket vengono risolti, migliori saranno i suggerimenti.");
+        console.log('MLWidget: ⚠️ Nessun suggerimento trovato');
+        setError("Nessun suggerimento ML trovato per questo ticket. Il sistema impara dai ticket risolti - assicurati che ci siano ticket simili risolti nel database.");
+        
+        // Suggerisci di testare il sistema
+        toast({
+          title: "Debug ML",
+          description: "Nessun suggerimento trovato. Clicca su 'Test Sistema' per verificare il funzionamento.",
+          variant: "default"
+        });
+      } else {
+        console.log('MLWidget: ✅ Suggerimenti caricati con successo');
+        suggestions.forEach((s, i) => {
+          console.log(`MLWidget: Suggerimento ${i + 1}: Confidenza ${s.confidence_score.toFixed(3)}, Lunghezza: ${s.suggested_solution.length}`);
+        });
       }
     } catch (error) {
-      console.error('MLWidget: Errore nel caricamento suggerimenti ML:', error);
-      setError("Errore nel caricamento dei suggerimenti ML. Riprova più tardi.");
+      console.error('MLWidget: ❌ Errore nel caricamento suggerimenti ML:', error);
+      setError(`Errore nel caricamento dei suggerimenti ML: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
       toast({
-        title: "Errore",
+        title: "Errore ML",
         description: "Impossibile caricare i suggerimenti dal sistema ML",
         variant: "destructive"
       });
@@ -134,7 +152,29 @@ const MLSuggestionsWidget = ({
   };
 
   const handleRefresh = () => {
+    console.log('MLWidget: Refresh manuale richiesto');
     loadMLSuggestions();
+  };
+
+  const handleTestSystem = async () => {
+    setLoading(true);
+    try {
+      console.log('MLWidget: Test sistema ML richiesto');
+      await mlKnowledgeService.testMLSystemWithIPOS();
+      toast({
+        title: "Test completato",
+        description: "Controlla la console per i risultati del test ML",
+      });
+    } catch (error) {
+      console.error('MLWidget: Errore nel test:', error);
+      toast({
+        title: "Errore test",
+        description: "Errore durante il test del sistema ML",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getConfidenceColor = (confidence: number) => {
@@ -161,7 +201,20 @@ const MLSuggestionsWidget = ({
         
         {error && (
           <div className="text-sm text-red-600 mb-2 p-2 bg-red-50 rounded">
+            <div className="flex items-center gap-2 mb-1">
+              <Bug className="h-4 w-4" />
+              <strong>Debug ML:</strong>
+            </div>
             {error}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleTestSystem}
+              className="mt-2 w-full"
+              disabled={loading}
+            >
+              Test Sistema ML
+            </Button>
           </div>
         )}
         
@@ -207,14 +260,25 @@ const MLSuggestionsWidget = ({
         <CardTitle className="flex items-center gap-2">
           <Brain className="h-5 w-5 text-purple-600" />
           Suggerimenti ML
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            onClick={handleRefresh}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+          <div className="flex gap-1">
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleTestSystem}
+              disabled={loading}
+              title="Test sistema ML"
+            >
+              <Bug className="h-4 w-4" />
+            </Button>
+          </div>
         </CardTitle>
         <CardDescription>
           Soluzioni intelligenti basate su ticket risolti simili nel sistema
@@ -245,7 +309,16 @@ const MLSuggestionsWidget = ({
         {error && !loading && (
           <div className="text-center py-4 text-red-600 bg-red-50 rounded-lg">
             <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">{error}</p>
+            <p className="text-sm mb-3">{error}</p>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleTestSystem}
+              disabled={loading}
+            >
+              <Bug className="h-4 w-4 mr-2" />
+              Test Sistema ML
+            </Button>
           </div>
         )}
 
@@ -332,9 +405,18 @@ const MLSuggestionsWidget = ({
             <p className="text-sm">
               Nessun suggerimento ML trovato per questo ticket.
             </p>
-            <p className="text-xs mt-1">
+            <p className="text-xs mt-1 mb-3">
               Il sistema impara dai ticket risolti - più dati ci sono, migliori saranno i suggerimenti.
             </p>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleTestSystem}
+              disabled={loading}
+            >
+              <Bug className="h-4 w-4 mr-2" />
+              Test Sistema ML
+            </Button>
           </div>
         )}
       </CardContent>
