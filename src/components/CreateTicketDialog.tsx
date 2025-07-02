@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -19,6 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { automationService } from "@/services/automationService";
+import { sanitizeText } from "@/utils/sanitizer";
 
 interface Category {
   id: string;
@@ -78,7 +80,12 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.description.trim()) {
+    
+    // Sanitize input data
+    const sanitizedTitle = sanitizeText(formData.title);
+    const sanitizedDescription = sanitizeText(formData.description);
+    
+    if (!sanitizedTitle.trim() || !sanitizedDescription.trim()) {
       toast.error('Titolo e descrizione sono obbligatori');
       return;
     }
@@ -88,11 +95,14 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utente non autenticato');
 
-      // Crea il ticket
+      // Crea il ticket con dati sanitizzati
       const { data: ticket, error } = await supabase
         .from('tickets')
         .insert({
-          ...formData,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          priority: formData.priority,
+          category_id: formData.category_id || null,
           user_id: user.id
         })
         .select()
@@ -107,7 +117,7 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
         try {
           await automationService.generateSmartSuggestions(
             ticket.id,
-            `${formData.title} ${formData.description}`
+            `${sanitizedTitle} ${sanitizedDescription}`
           );
           console.log('Suggerimenti automatici generati per il ticket:', ticket.id);
         } catch (error) {
@@ -133,6 +143,13 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
     }
   };
 
+  const handleInputChange = (field: keyof TicketFormData, value: string) => {
+    if (field === 'title' || field === 'description') {
+      value = sanitizeText(value);
+    }
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
@@ -146,8 +163,9 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
             <Input
               id="title"
               value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              onChange={(e) => handleInputChange('title', e.target.value)}
               placeholder="Descrivi brevemente il problema..."
+              maxLength={200}
               required
             />
           </div>
@@ -157,9 +175,10 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
             <Textarea
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(e) => handleInputChange('description', e.target.value)}
               placeholder="Fornisci dettagli sul problema, inclusi codici negozio, indirizzi IP o altre informazioni utili..."
               rows={4}
+              maxLength={2000}
               required
             />
           </div>

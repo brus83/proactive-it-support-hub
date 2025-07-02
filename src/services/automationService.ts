@@ -1,5 +1,7 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { storeService } from "./storeService";
+import { sanitizeSearchQuery, sanitizeHtml } from "@/utils/sanitizer";
 
 export interface AutomationLog {
   id: string;
@@ -49,11 +51,8 @@ class AutomationService {
         return [];
       }
 
-      // Pulisce il testo di ricerca in modo più conservativo
-      const cleanSearchText = searchText
-        .trim()
-        .replace(/\s+/g, ' ') // Sostituisce spazi multipli con uno solo
-        .substring(0, 100); // Limita la lunghezza
+      // Sanitize the search text to prevent SQL injection
+      const cleanSearchText = sanitizeSearchQuery(searchText);
 
       console.log('Ricerca KB - Testo pulito:', cleanSearchText);
 
@@ -70,7 +69,13 @@ class AutomationService {
       }
 
       console.log('Risultati KB trovati:', data?.length || 0);
-      return data || [];
+      
+      // Sanitize HTML content before returning
+      return (data || []).map(kb => ({
+        ...kb,
+        content: sanitizeHtml(kb.content),
+        title: sanitizeHtml(kb.title)
+      }));
     } catch (error) {
       console.error('Errore in getKBSuggestions:', error);
       return [];

@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizeSearchQuery } from "@/utils/sanitizer";
 
 export interface StoreLocation {
   id: string;
@@ -17,11 +17,8 @@ class StoreService {
     try {
       console.log('Ricerca negozi - Input originale:', searchText);
       
-      // Pulisce il testo di ricerca in modo più conservativo
-      const cleanSearchText = searchText
-        .trim()
-        .replace(/\s+/g, ' ') // Sostituisce spazi multipli con uno solo
-        .substring(0, 100); // Limita la lunghezza
+      // Sanitize the search text to prevent SQL injection
+      const cleanSearchText = sanitizeSearchQuery(searchText);
 
       if (!cleanSearchText || cleanSearchText.length < 2) {
         console.log('Testo di ricerca troppo breve:', cleanSearchText);
@@ -30,7 +27,7 @@ class StoreService {
 
       console.log('Ricerca negozi - Testo pulito:', cleanSearchText);
 
-      // Prima provo con la funzione RPC
+      // Use parameterized query with proper escaping
       const { data: rpcData, error: rpcError } = await supabase
         .rpc('get_store_suggestions', { search_text: cleanSearchText });
 
@@ -44,7 +41,7 @@ class StoreService {
 
       console.log('RPC fallita o senza risultati, provo query diretta. Errore RPC:', rpcError);
 
-      // Se la RPC fallisce, uso una query diretta più semplice
+      // Fallback to direct query using proper parameterization
       const { data: directData, error: directError } = await supabase
         .from('store_locations')
         .select('*')

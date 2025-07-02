@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, BookOpen, Eye } from "lucide-react";
 import { automationService, KnowledgeBase } from "@/services/automationService";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeSearchQuery } from "@/utils/sanitizer";
+import SafeHtmlRenderer from "./SafeHtmlRenderer";
 
 interface KnowledgeBaseWidgetProps {
   searchQuery?: string;
@@ -28,28 +30,31 @@ const KnowledgeBaseWidget = ({
   useEffect(() => {
     if (searchQuery && searchQuery.trim().length > 2) {
       console.log('KnowledgeBase - Auto search per:', searchQuery);
-      setLocalSearch(searchQuery);
-      searchKnowledgeBase(searchQuery);
+      const sanitizedQuery = sanitizeSearchQuery(searchQuery);
+      setLocalSearch(sanitizedQuery);
+      searchKnowledgeBase(sanitizedQuery);
     }
   }, [searchQuery]);
 
   const searchKnowledgeBase = async (query: string) => {
-    if (!query.trim() || query.trim().length < 2) {
+    const sanitizedQuery = sanitizeSearchQuery(query);
+    
+    if (!sanitizedQuery || sanitizedQuery.length < 2) {
       setSuggestions([]);
       return;
     }
 
     setLoading(true);
     try {
-      console.log('KnowledgeBase - Ricerca per:', query);
-      const results = await automationService.getKBSuggestions(query);
+      console.log('KnowledgeBase - Ricerca per:', sanitizedQuery);
+      const results = await automationService.getKBSuggestions(sanitizedQuery);
       console.log('KnowledgeBase - Risultati trovati:', results.length);
       setSuggestions(results);
       
       if (results.length === 0) {
         toast({
           title: "Nessun risultato",
-          description: `Nessun articolo trovato per "${query}"`,
+          description: `Nessun articolo trovato per "${sanitizedQuery}"`,
         });
       }
     } catch (error) {
@@ -65,7 +70,8 @@ const KnowledgeBaseWidget = ({
   };
 
   const handleSearch = () => {
-    if (localSearch.trim().length < 2) {
+    const sanitizedQuery = sanitizeSearchQuery(localSearch);
+    if (sanitizedQuery.length < 2) {
       toast({
         title: "Ricerca troppo breve",
         description: "Inserisci almeno 2 caratteri per la ricerca",
@@ -73,7 +79,7 @@ const KnowledgeBaseWidget = ({
       });
       return;
     }
-    searchKnowledgeBase(localSearch);
+    searchKnowledgeBase(sanitizedQuery);
   };
 
   const handleArticleClick = (article: KnowledgeBase) => {
@@ -83,6 +89,11 @@ const KnowledgeBaseWidget = ({
     if (onSuggestionClick) {
       onSuggestionClick(article);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitizedValue = sanitizeSearchQuery(e.target.value);
+    setLocalSearch(sanitizedValue);
   };
 
   if (compact) {
@@ -126,8 +137,9 @@ const KnowledgeBaseWidget = ({
           <Input
             placeholder="Cerca nella knowledge base..."
             value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            maxLength={100}
           />
           <Button 
             onClick={handleSearch} 
@@ -167,9 +179,10 @@ const KnowledgeBaseWidget = ({
                     </div>
                   </div>
                   
-                  <p className="text-sm text-muted-foreground mb-3 line-clamp-3">
-                    {article.content.replace(/<[^>]*>/g, '').substring(0, 200)}...
-                  </p>
+                  <SafeHtmlRenderer 
+                    html={article.content.substring(0, 200) + '...'}
+                    className="text-sm text-muted-foreground mb-3 line-clamp-3"
+                  />
                   
                   {article.keywords && article.keywords.length > 0 && (
                     <div className="flex flex-wrap gap-1">

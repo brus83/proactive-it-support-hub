@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Building, Network, Search, Copy, Check } from "lucide-react";
 import { storeService, StoreLocation } from "@/services/storeService";
 import { toast } from "sonner";
+import { sanitizeSearchQuery } from "@/utils/sanitizer";
 
 interface StoreSuggestionsWidgetProps {
   ticketTitle: string;
@@ -31,9 +32,10 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
     setLoading(true);
     try {
       const fullText = `${ticketTitle} ${ticketDescription}`;
-      console.log('StoreSuggestions - Caricamento automatico per:', fullText);
+      const sanitizedText = sanitizeSearchQuery(fullText);
+      console.log('StoreSuggestions - Caricamento automatico per:', sanitizedText);
       
-      const extractedInfo = storeService.extractStoreInfo(fullText);
+      const extractedInfo = storeService.extractStoreInfo(sanitizedText);
       console.log('StoreSuggestions - Info estratte:', extractedInfo);
       
       let allSuggestions: StoreLocation[] = [];
@@ -64,9 +66,9 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
       }
 
       // Cerca suggerimenti generali basati sul testo completo
-      if (fullText.trim().length > 3) {
-        console.log('StoreSuggestions - Ricerca generale per:', fullText);
-        const generalSuggestions = await storeService.getStoreSuggestions(fullText);
+      if (sanitizedText.length > 3) {
+        console.log('StoreSuggestions - Ricerca generale per:', sanitizedText);
+        const generalSuggestions = await storeService.getStoreSuggestions(sanitizedText);
         allSuggestions.push(...generalSuggestions.map(s => ({ 
           ...s, 
           relevance_score: s.relevance_score || 0.5 
@@ -92,15 +94,17 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+    const sanitizedTerm = sanitizeSearchQuery(searchTerm);
+    
+    if (!sanitizedTerm || sanitizedTerm.length < 2) {
       toast.error('Inserisci almeno 2 caratteri per la ricerca');
       return;
     }
     
     setLoading(true);
     try {
-      console.log('StoreSuggestions - Ricerca manuale per:', searchTerm);
-      const results = await storeService.getStoreSuggestions(searchTerm);
+      console.log('StoreSuggestions - Ricerca manuale per:', sanitizedTerm);
+      const results = await storeService.getStoreSuggestions(sanitizedTerm);
       console.log('StoreSuggestions - Risultati ricerca manuale:', results.length);
       setSearchResults(results);
       
@@ -115,6 +119,11 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitizedValue = sanitizeSearchQuery(e.target.value);
+    setSearchTerm(sanitizedValue);
   };
 
   const copyToClipboard = async (text: string, type: string) => {
@@ -234,9 +243,10 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
           <Input
             placeholder="Cerca per nome, codice, città o IP..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             className="flex-1"
+            maxLength={100}
           />
           <Button 
             onClick={handleSearch} 
