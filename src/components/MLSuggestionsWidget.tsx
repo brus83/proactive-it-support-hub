@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ThumbsUp, ThumbsDown, Brain, Lightbulb, TrendingUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Brain, Lightbulb, TrendingUp, RefreshCw } from "lucide-react";
 import { mlKnowledgeService, MLSuggestion } from "@/services/mlKnowledgeService";
 import { useToast } from "@/hooks/use-toast";
 import SafeHtmlRenderer from "./SafeHtmlRenderer";
@@ -28,6 +27,7 @@ const MLSuggestionsWidget = ({
   const [suggestions, setSuggestions] = useState<MLSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,24 +42,23 @@ const MLSuggestionsWidget = ({
 
   const loadMLSuggestions = async () => {
     setLoading(true);
+    setError(null);
     try {
-      console.log('Caricamento suggerimenti ML per:', ticketTitle);
+      console.log('MLWidget: Caricamento suggerimenti ML per:', ticketTitle);
       const suggestions = await mlKnowledgeService.generateMLSuggestions(
         ticketTitle, 
         ticketDescription
       );
       
-      console.log('Suggerimenti ML trovati:', suggestions.length);
+      console.log('MLWidget: Suggerimenti ML ricevuti:', suggestions.length);
       setSuggestions(suggestions);
       
       if (suggestions.length === 0) {
-        toast({
-          title: "Nessun suggerimento trovato",
-          description: "Non sono stati trovati ticket risolti simili nel sistema",
-        });
+        setError("Nessun suggerimento trovato. Il sistema ML impara dai ticket risolti - più ticket vengono risolti, migliori saranno i suggerimenti.");
       }
     } catch (error) {
-      console.error('Errore nel caricamento suggerimenti ML:', error);
+      console.error('MLWidget: Errore nel caricamento suggerimenti ML:', error);
+      setError("Errore nel caricamento dei suggerimenti ML. Riprova più tardi.");
       toast({
         title: "Errore",
         description: "Impossibile caricare i suggerimenti dal sistema ML",
@@ -74,8 +73,9 @@ const MLSuggestionsWidget = ({
     try {
       const performanceStats = await mlKnowledgeService.getMLPerformanceStats();
       setStats(performanceStats);
+      console.log('MLWidget: Statistiche caricate:', performanceStats);
     } catch (error) {
-      console.error('Errore nel caricamento statistiche ML:', error);
+      console.error('MLWidget: Errore nel caricamento statistiche ML:', error);
     }
   };
 
@@ -84,7 +84,14 @@ const MLSuggestionsWidget = ({
     wasHelpful: boolean,
     feedback?: string
   ) => {
-    if (!ticketId) return;
+    if (!ticketId) {
+      toast({
+        title: "Errore",
+        description: "ID ticket non disponibile per il feedback",
+        variant: "destructive"
+      });
+      return;
+    }
 
     try {
       await mlKnowledgeService.rateSuggestion(
@@ -96,13 +103,13 @@ const MLSuggestionsWidget = ({
 
       toast({
         title: "Feedback inviato",
-        description: `Grazie per il feedback! Ci aiuta a migliorare il sistema.`,
+        description: `Grazie per il feedback! Ci aiuta a migliorare il sistema ML.`,
       });
 
       // Ricarica statistiche
       loadMLStats();
     } catch (error) {
-      console.error('Errore nell\'invio del feedback:', error);
+      console.error('MLWidget: Errore nell\'invio del feedback:', error);
       toast({
         title: "Errore",
         description: "Impossibile inviare il feedback",
@@ -114,40 +121,62 @@ const MLSuggestionsWidget = ({
   const handleApplySuggestion = (suggestion: MLSuggestion) => {
     if (onSuggestionApply) {
       onSuggestionApply(suggestion.suggested_solution);
+      toast({
+        title: "Suggerimento applicato",
+        description: "Il suggerimento è stato aggiunto al commento",
+      });
     }
     
     // Invia feedback positivo automaticamente quando viene applicato
     if (ticketId) {
-      handleSuggestionFeedback(suggestion, true, "Soluzione applicata");
+      handleSuggestionFeedback(suggestion, true, "Soluzione applicata automaticamente");
     }
   };
 
+  const handleRefresh = () => {
+    loadMLSuggestions();
+  };
+
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return "bg-green-100 text-green-800 border-green-200";
-    if (confidence >= 0.6) return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    if (confidence >= 0.7) return "bg-green-100 text-green-800 border-green-200";
+    if (confidence >= 0.5) return "bg-yellow-100 text-yellow-800 border-yellow-200";
     return "bg-orange-100 text-orange-800 border-orange-200";
   };
 
   const getConfidenceText = (confidence: number) => {
-    if (confidence >= 0.8) return "Alta";
-    if (confidence >= 0.6) return "Media";
+    if (confidence >= 0.7) return "Alta";
+    if (confidence >= 0.5) return "Media";
     return "Bassa";
   };
 
   if (compact) {
     return (
       <div className="space-y-2">
+        {loading && (
+          <div className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            Analisi ML in corso...
+          </div>
+        )}
+        
+        {error && (
+          <div className="text-sm text-red-600 mb-2 p-2 bg-red-50 rounded">
+            {error}
+          </div>
+        )}
+        
         {suggestions.length > 0 && (
           <div className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
             <Brain className="h-4 w-4" />
-            💡 Suggerimenti ML dal sistema:
+            💡 Suggerimenti ML ({suggestions.length}):
           </div>
         )}
+        
         {suggestions.slice(0, 2).map((suggestion) => (
-          <Card key={suggestion.suggestion_id} className="p-3">
+          <Card key={suggestion.suggestion_id} className="p-3 border-l-4 border-l-purple-500">
             <div className="flex items-start justify-between mb-2">
               <Badge className={getConfidenceColor(suggestion.confidence_score)}>
-                Confidenza: {getConfidenceText(suggestion.confidence_score)}
+                {getConfidenceText(suggestion.confidence_score)} ({Math.round(suggestion.confidence_score * 100)}%)
               </Badge>
               <div className="flex gap-1">
                 <Button 
@@ -164,7 +193,7 @@ const MLSuggestionsWidget = ({
               className="text-sm mb-2"
             />
             <div className="text-xs text-muted-foreground">
-              Basato su {suggestion.source_tickets.length} ticket risolti
+              Basato su {suggestion.source_tickets.length} ticket risolti simili
             </div>
           </Card>
         ))}
@@ -176,20 +205,31 @@ const MLSuggestionsWidget = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5" />
+          <Brain className="h-5 w-5 text-purple-600" />
           Suggerimenti ML
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </CardTitle>
         <CardDescription>
-          Soluzioni basate su ticket risolti simili nel sistema
+          Soluzioni intelligenti basate su ticket risolti simili nel sistema
         </CardDescription>
         {stats && (
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4 text-sm bg-purple-50 p-2 rounded">
             <div className="flex items-center gap-1">
               <TrendingUp className="h-4 w-4" />
               Accuratezza: {stats.accuracyRate}%
             </div>
             <div>
-              Suggerimenti utili: {stats.helpfulSuggestions}/{stats.totalSuggestions}
+              Feedback: {stats.helpfulSuggestions}/{stats.totalSuggestions}
+            </div>
+            <div>
+              Ultima settimana: {stats.lastWeekSuggestions}
             </div>
           </div>
         )}
@@ -198,32 +238,40 @@ const MLSuggestionsWidget = ({
         {loading && (
           <div className="text-center py-4 text-muted-foreground">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
-            Analisi ticket risolti simili...
+            Analisi ticket risolti simili con ML...
           </div>
         )}
 
-        {suggestions.length > 0 && (
+        {error && !loading && (
+          <div className="text-center py-4 text-red-600 bg-red-50 rounded-lg">
+            <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+
+        {suggestions.length > 0 && !loading && (
           <ScrollArea className="h-96">
             <div className="space-y-4">
-              <div className="text-sm text-muted-foreground mb-2">
+              <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-yellow-500" />
                 Trovati {suggestions.length} suggerimenti dal sistema ML
               </div>
               {suggestions.map((suggestion, index) => (
                 <div key={suggestion.suggestion_id}>
-                  <Card className="p-4">
+                  <Card className="p-4 border-l-4 border-l-purple-500">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Lightbulb className="h-4 w-4 text-yellow-500" />
-                        <span className="font-medium">Suggerimento {index + 1}</span>
+                        <span className="font-medium">Suggerimento ML {index + 1}</span>
                       </div>
                       <Badge className={getConfidenceColor(suggestion.confidence_score)}>
-                        Confidenza: {Math.round(suggestion.confidence_score * 100)}%
+                        {getConfidenceText(suggestion.confidence_score)} ({Math.round(suggestion.confidence_score * 100)}%)
                       </Badge>
                     </div>
                     
                     <SafeHtmlRenderer 
                       html={suggestion.suggested_solution}
-                      className="mb-3 p-3 bg-muted/30 rounded-lg"
+                      className="mb-3 p-3 bg-purple-50 rounded-lg border"
                     />
                     
                     <div className="flex items-center justify-between">
@@ -278,14 +326,14 @@ const MLSuggestionsWidget = ({
           </ScrollArea>
         )}
 
-        {!loading && suggestions.length === 0 && (
+        {!loading && suggestions.length === 0 && !error && (
           <div className="text-center py-8 text-muted-foreground">
             <Brain className="w-12 h-12 mx-auto mb-2 opacity-50" />
             <p className="text-sm">
-              Nessun suggerimento trovato dal sistema ML.
+              Nessun suggerimento ML trovato per questo ticket.
             </p>
             <p className="text-xs mt-1">
-              Il sistema apprende dai ticket risolti per fornire suggerimenti migliori.
+              Il sistema impara dai ticket risolti - più dati ci sono, migliori saranno i suggerimenti.
             </p>
           </div>
         )}

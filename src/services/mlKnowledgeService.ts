@@ -1,8 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { sanitizeSearchQuery, sanitizeText } from "@/utils/sanitizer";
 
-interface SimilarTicketResponse {
+export interface SimilarTicketResponse {
   ticket_id: string;
   title: string;
   description: string;
@@ -12,7 +11,7 @@ interface SimilarTicketResponse {
   category?: string;
 }
 
-interface MLSuggestion {
+export interface MLSuggestion {
   suggestion_id: string;
   suggested_solution: string;
   confidence_score: number;
@@ -31,7 +30,7 @@ class MLKnowledgeService {
       'il', 'la', 'di', 'che', 'e', 'a', 'un', 'per', 'in', 'con', 'su', 'da', 
       'del', 'non', 'ho', 'mi', 'si', 'ma', 'come', 'anche', 'questo', 'quella',
       'sono', 'essere', 'fare', 'dire', 'andare', 'vedere', 'sapere', 'dare',
-      'problema', 'errore', 'aiuto', 'grazie', 'prego', 'problema'
+      'problema', 'errore', 'aiuto', 'grazie', 'prego'
     ];
     
     // Estrai parole tecniche e significative
@@ -71,13 +70,17 @@ class MLKnowledgeService {
     limit: number = 5
   ): Promise<SimilarTicketResponse[]> {
     try {
+      console.log('ML: Ricerca ticket simili per:', currentTitle);
+      
       const sanitizedTitle = sanitizeSearchQuery(currentTitle);
       const sanitizedDescription = sanitizeSearchQuery(currentDescription);
       
       // Estrai keywords dal ticket corrente
       const currentKeywords = this.extractKeywords(`${sanitizedTitle} ${sanitizedDescription}`);
+      console.log('ML: Keywords estratte:', currentKeywords);
       
       if (currentKeywords.length === 0) {
+        console.log('ML: Nessuna keyword estratta');
         return [];
       }
 
@@ -92,15 +95,21 @@ class MLKnowledgeService {
           resolved_at,
           categories (name)
         `)
-        .eq('status', 'resolved')
+        .in('status', ['resolved', 'closed'])
         .not('resolution_notes', 'is', null)
         .neq('resolution_notes', '')
         .order('resolved_at', { ascending: false })
-        .limit(50); // Limita per performance
+        .limit(100); // Aumentato per avere più dati
 
-      if (error) throw error;
+      if (error) {
+        console.error('ML: Errore query database:', error);
+        throw error;
+      }
+
+      console.log('ML: Ticket risolti trovati:', resolvedTickets?.length || 0);
 
       if (!resolvedTickets || resolvedTickets.length === 0) {
+        console.log('ML: Nessun ticket risolto trovato nel database');
         return [];
       }
 
@@ -122,9 +131,15 @@ class MLKnowledgeService {
             category: ticket.categories?.name
           };
         })
-        .filter(ticket => ticket.similarity_score > 0.1) // Soglia minima di similarità
+        .filter(ticket => ticket.similarity_score > 0.05) // Soglia più bassa
         .sort((a, b) => b.similarity_score - a.similarity_score)
         .slice(0, limit);
+
+      console.log('ML: Ticket simili trovati:', similarTickets.length);
+      console.log('ML: Migliori similarità:', similarTickets.slice(0, 3).map(t => ({ 
+        title: t.title.substring(0, 50), 
+        score: t.similarity_score 
+      })));
 
       return similarTickets;
     } catch (error) {
@@ -139,6 +154,8 @@ class MLKnowledgeService {
     currentDescription: string
   ): Promise<MLSuggestion[]> {
     try {
+      console.log('ML: Generazione suggerimenti per:', currentTitle);
+      
       const similarTickets = await this.findSimilarResolvedTickets(
         currentTitle, 
         currentDescription, 
@@ -146,15 +163,18 @@ class MLKnowledgeService {
       );
 
       if (similarTickets.length === 0) {
+        console.log('ML: Nessun ticket simile trovato');
         return [];
       }
+
+      console.log('ML: Elaborazione di', similarTickets.length, 'ticket simili');
 
       // Raggruppa soluzioni simili
       const solutionGroups: { [key: string]: SimilarTicketResponse[] } = {};
       
       similarTickets.forEach(ticket => {
         const solutionKeywords = this.extractKeywords(ticket.resolution_notes);
-        const groupKey = solutionKeywords.slice(0, 3).join('_');
+        const groupKey = solutionKeywords.slice(0, 3).join('_') || 'generic';
         
         if (!solutionGroups[groupKey]) {
           solutionGroups[groupKey] = [];
@@ -162,11 +182,13 @@ class MLKnowledgeService {
         solutionGroups[groupKey].push(ticket);
       });
 
+      console.log('ML: Gruppi di soluzioni creati:', Object.keys(solutionGroups).length);
+
       // Genera suggerimenti da ogni gruppo
       const suggestions: MLSuggestion[] = Object.entries(solutionGroups)
         .map(([groupKey, tickets]) => {
           const bestTicket = tickets[0]; // Il più simile del gruppo
-          const confidence = Math.min(0.95, tickets.length * 0.1 + bestTicket.similarity_score);
+          const confidence = Math.min(0.95, tickets.length * 0.15 + bestTicket.similarity_score);
           
           // Combina e migliora la soluzione
           const combinedSolution = this.refineSolution(
@@ -174,7 +196,7 @@ class MLKnowledgeService {
           );
 
           return {
-            suggestion_id: `ml_${groupKey}_${Date.now()}`,
+            suggestion_id: `ml_${groupKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             suggested_solution: combinedSolution,
             confidence_score: confidence,
             source_tickets: tickets.map(t => t.ticket_id),
@@ -182,8 +204,14 @@ class MLKnowledgeService {
             created_at: new Date().toISOString()
           };
         })
+        .filter(suggestion => suggestion.suggested_solution.length > 10) // Filtra soluzioni troppo corte
         .sort((a, b) => b.confidence_score - a.confidence_score)
-        .slice(0, 3); // Massimo 3 suggerimenti
+        .slice(0, 5); // Massimo 5 suggerimenti
+
+      console.log('ML: Suggerimenti generati:', suggestions.length);
+      suggestions.forEach((s, i) => {
+        console.log(`ML: Suggerimento ${i + 1}: Confidenza ${s.confidence_score.toFixed(2)}, Lunghezza: ${s.suggested_solution.length}`);
+      });
 
       return suggestions;
     } catch (error) {
@@ -221,7 +249,9 @@ class MLKnowledgeService {
       const sentences = solution.split(/[.!?]+/).filter(s => s.trim().length > 10);
       sentences.forEach(sentence => {
         const cleanSentence = sentence.trim().toLowerCase();
-        phrases[cleanSentence] = (phrases[cleanSentence] || 0) + 1;
+        if (cleanSentence.length > 15) { // Solo frasi significative
+          phrases[cleanSentence] = (phrases[cleanSentence] || 0) + 1;
+        }
       });
     });
 
@@ -243,24 +273,33 @@ class MLKnowledgeService {
     feedback?: string
   ): Promise<void> {
     try {
+      console.log('ML: Salvando feedback per suggerimento:', suggestionId, 'Utile:', wasHelpful);
+      
       // Salva il feedback per migliorare il sistema
-      await supabase
+      const { error } = await supabase
         .from('automation_logs')
         .insert({
           ticket_id: ticketId,
-          action_type: 'ml_feedback',
+          action_type: 'kb_suggestion', // Usa un tipo esistente
           action_details: {
             suggestion_id: suggestionId,
             was_helpful: wasHelpful,
             feedback: feedback || null,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            ml_feedback: true
           },
           success: wasHelpful
         });
 
-      console.log(`Feedback salvato per suggerimento ${suggestionId}: ${wasHelpful ? 'Utile' : 'Non utile'}`);
+      if (error) {
+        console.error('ML: Errore nel salvare feedback:', error);
+        throw error;
+      }
+
+      console.log(`ML: Feedback salvato con successo per suggerimento ${suggestionId}`);
     } catch (error) {
       console.error('Errore nel salvare feedback:', error);
+      throw error;
     }
   }
 
@@ -277,15 +316,30 @@ class MLKnowledgeService {
       const { data: feedbackLogs, error } = await supabase
         .from('automation_logs')
         .select('action_details, success, triggered_at')
-        .eq('action_type', 'ml_feedback');
+        .eq('action_type', 'kb_suggestion')
+        .not('action_details->ml_feedback', 'is', null);
 
-      if (error) throw error;
+      if (error) {
+        console.error('ML: Errore nel recuperare statistiche:', error);
+        throw error;
+      }
 
-      const totalSuggestions = feedbackLogs?.length || 0;
-      const helpfulSuggestions = feedbackLogs?.filter(log => log.success).length || 0;
-      const lastWeekSuggestions = feedbackLogs?.filter(log => log.triggered_at >= oneWeekAgo).length || 0;
+      const mlFeedbackLogs = feedbackLogs?.filter(log => 
+        log.action_details && log.action_details.ml_feedback === true
+      ) || [];
+
+      const totalSuggestions = mlFeedbackLogs.length;
+      const helpfulSuggestions = mlFeedbackLogs.filter(log => log.success).length;
+      const lastWeekSuggestions = mlFeedbackLogs.filter(log => log.triggered_at >= oneWeekAgo).length;
       
       const accuracyRate = totalSuggestions > 0 ? (helpfulSuggestions / totalSuggestions) * 100 : 0;
+
+      console.log('ML: Statistiche calcolate:', {
+        totalSuggestions,
+        helpfulSuggestions,
+        accuracyRate,
+        lastWeekSuggestions
+      });
 
       return {
         totalSuggestions,
@@ -303,7 +357,26 @@ class MLKnowledgeService {
       };
     }
   }
+
+  // Metodo per testare il sistema con dati di esempio
+  async testMLSystem(): Promise<void> {
+    console.log('ML: Test del sistema ML...');
+    
+    try {
+      // Test con un esempio
+      const suggestions = await this.generateMLSuggestions(
+        "Problema stampante non funziona",
+        "La stampante dell'ufficio non stampa più, sembra che sia un problema di driver"
+      );
+      
+      console.log('ML: Test completato. Suggerimenti trovati:', suggestions.length);
+      suggestions.forEach((s, i) => {
+        console.log(`ML: Test Suggerimento ${i + 1}:`, s.suggested_solution.substring(0, 100));
+      });
+    } catch (error) {
+      console.error('ML: Errore nel test:', error);
+    }
+  }
 }
 
 export const mlKnowledgeService = new MLKnowledgeService();
-export type { MLSuggestion, SimilarTicketResponse };

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { storeService } from "./storeService";
 import { sanitizeSearchQuery, sanitizeHtml } from "@/utils/sanitizer";
@@ -44,17 +43,17 @@ export interface ScheduledIntervention {
 class AutomationService {
   async getKBSuggestions(searchText: string): Promise<KnowledgeBase[]> {
     try {
-      console.log('Ricerca KB - Input originale:', searchText);
+      console.log('KB: Ricerca KB - Input originale:', searchText);
       
       if (!searchText || searchText.trim().length < 2) {
-        console.log('Testo di ricerca KB troppo breve');
+        console.log('KB: Testo di ricerca KB troppo breve');
         return [];
       }
 
       // Sanitize the search text to prevent SQL injection
       const cleanSearchText = sanitizeSearchQuery(searchText);
 
-      console.log('Ricerca KB - Testo pulito:', cleanSearchText);
+      console.log('KB: Ricerca KB - Testo pulito:', cleanSearchText);
 
       const { data, error } = await supabase
         .from('knowledge_base')
@@ -64,11 +63,11 @@ class AutomationService {
         .limit(10);
 
       if (error) {
-        console.error('Errore ricerca KB:', error);
+        console.error('KB: Errore ricerca KB:', error);
         return [];
       }
 
-      console.log('Risultati KB trovati:', data?.length || 0);
+      console.log('KB: Risultati KB trovati:', data?.length || 0);
       
       // Sanitize HTML content before returning
       return (data || []).map(kb => ({
@@ -77,7 +76,7 @@ class AutomationService {
         title: sanitizeHtml(kb.title)
       }));
     } catch (error) {
-      console.error('Errore in getKBSuggestions:', error);
+      console.error('KB: Errore in getKBSuggestions:', error);
       return [];
     }
   }
@@ -311,7 +310,7 @@ class AutomationService {
 
   async generateSmartSuggestions(ticketId: string, ticketText: string) {
     try {
-      console.log('Generazione suggerimenti intelligenti per ticket:', ticketId);
+      console.log('AutomationService: Generazione suggerimenti intelligenti per ticket:', ticketId);
 
       // Genera suggerimenti ML dai ticket risolti
       const { mlKnowledgeService } = await import('./mlKnowledgeService');
@@ -377,9 +376,9 @@ class AutomationService {
           success: true
         });
 
-      console.log('Suggerimenti intelligenti generati con successo');
+      console.log('AutomationService: Suggerimenti intelligenti generati con successo');
     } catch (error) {
-      console.error('Errore nella generazione suggerimenti intelligenti:', error);
+      console.error('AutomationService: Errore nella generazione suggerimenti intelligenti:', error);
       
       await supabase
         .from('automation_logs')
