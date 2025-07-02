@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ const KnowledgeBaseWidget = ({
 
   useEffect(() => {
     if (searchQuery && searchQuery.trim().length > 2) {
+      console.log('KnowledgeBase - Auto search per:', searchQuery);
       setLocalSearch(searchQuery);
       searchKnowledgeBase(searchQuery);
     }
@@ -39,7 +41,9 @@ const KnowledgeBaseWidget = ({
 
     setLoading(true);
     try {
+      console.log('KnowledgeBase - Ricerca per:', query);
       const results = await automationService.getKBSuggestions(query);
+      console.log('KnowledgeBase - Risultati trovati:', results.length);
       setSuggestions(results);
       
       if (results.length === 0) {

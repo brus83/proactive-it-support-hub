@@ -15,31 +15,55 @@ export interface StoreLocation {
 class StoreService {
   async getStoreSuggestions(searchText: string): Promise<StoreLocation[]> {
     try {
-      // Pulisce il testo di ricerca
+      console.log('Ricerca negozi - Input originale:', searchText);
+      
+      // Pulisce il testo di ricerca in modo più conservativo
       const cleanSearchText = searchText
-        .replace(/\n/g, ' ')
-        .replace(/\r/g, ' ')
-        .replace(/\t/g, ' ')
         .trim()
-        .substring(0, 50); // Limita la lunghezza
+        .replace(/\s+/g, ' ') // Sostituisce spazi multipli con uno solo
+        .substring(0, 100); // Limita la lunghezza
 
       if (!cleanSearchText || cleanSearchText.length < 2) {
-        console.log('Testo di ricerca troppo breve o vuoto');
+        console.log('Testo di ricerca troppo breve:', cleanSearchText);
         return [];
       }
 
-      console.log('Ricerca negozi con testo:', cleanSearchText);
+      console.log('Ricerca negozi - Testo pulito:', cleanSearchText);
 
-      const { data, error } = await supabase
+      // Prima provo con la funzione RPC
+      const { data: rpcData, error: rpcError } = await supabase
         .rpc('get_store_suggestions', { search_text: cleanSearchText });
 
-      if (error) {
-        console.error('Errore nel recupero suggerimenti negozi:', error);
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        console.log('Risultati RPC trovati:', rpcData.length);
+        return rpcData.map(store => ({
+          ...store,
+          relevance_score: store.relevance_score || 0.5
+        }));
+      }
+
+      console.log('RPC fallita o senza risultati, provo query diretta. Errore RPC:', rpcError);
+
+      // Se la RPC fallisce, uso una query diretta più semplice
+      const { data: directData, error: directError } = await supabase
+        .from('store_locations')
+        .select('*')
+        .eq('is_active', true)
+        .or(`store_name.ilike.%${cleanSearchText}%,city.ilike.%${cleanSearchText}%,store_code.ilike.%${cleanSearchText}%,address.ilike.%${cleanSearchText}%`)
+        .limit(10);
+
+      if (directError) {
+        console.error('Errore query diretta:', directError);
         return [];
       }
 
-      console.log('Suggerimenti negozi trovati:', data?.length || 0);
-      return data || [];
+      console.log('Risultati query diretta:', directData?.length || 0);
+      
+      return (directData || []).map(store => ({
+        ...store,
+        relevance_score: 0.5
+      }));
+
     } catch (error) {
       console.error('Errore in getStoreSuggestions:', error);
       return [];

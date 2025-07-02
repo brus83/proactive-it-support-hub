@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,12 +31,16 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
     setLoading(true);
     try {
       const fullText = `${ticketTitle} ${ticketDescription}`;
+      console.log('StoreSuggestions - Caricamento automatico per:', fullText);
+      
       const extractedInfo = storeService.extractStoreInfo(fullText);
+      console.log('StoreSuggestions - Info estratte:', extractedInfo);
       
       let allSuggestions: StoreLocation[] = [];
 
       // Cerca per codici negozio estratti
       for (const code of extractedInfo.possibleStoreCodes) {
+        console.log('StoreSuggestions - Ricerca per codice:', code);
         const store = await storeService.getStoreByCode(code);
         if (store) {
           allSuggestions.push({ ...store, relevance_score: 1.0 });
@@ -44,6 +49,7 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
 
       // Cerca per IP estratti
       for (const ip of extractedInfo.possibleIPs) {
+        console.log('StoreSuggestions - Ricerca per IP:', ip);
         const store = await storeService.getStoreByIpRange(ip);
         if (store) {
           allSuggestions.push({ ...store, relevance_score: 0.9 });
@@ -52,12 +58,14 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
 
       // Cerca per località menzionate
       for (const location of extractedInfo.locations) {
+        console.log('StoreSuggestions - Ricerca per località:', location);
         const stores = await storeService.getStoreSuggestions(location);
         allSuggestions.push(...stores.map(s => ({ ...s, relevance_score: 0.7 })));
       }
 
       // Cerca suggerimenti generali basati sul testo completo
       if (fullText.trim().length > 3) {
+        console.log('StoreSuggestions - Ricerca generale per:', fullText);
         const generalSuggestions = await storeService.getStoreSuggestions(fullText);
         allSuggestions.push(...generalSuggestions.map(s => ({ 
           ...s, 
@@ -73,6 +81,7 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
         .sort((a, b) => (b.relevance_score || 0) - (a.relevance_score || 0))
         .slice(0, 5);
 
+      console.log('StoreSuggestions - Suggerimenti finali:', uniqueSuggestions.length);
       setSuggestions(uniqueSuggestions);
     } catch (error) {
       console.error('Errore nel caricamento suggerimenti:', error);
@@ -90,7 +99,9 @@ const StoreSuggestionsWidget: React.FC<StoreSuggestionsWidgetProps> = ({
     
     setLoading(true);
     try {
+      console.log('StoreSuggestions - Ricerca manuale per:', searchTerm);
       const results = await storeService.getStoreSuggestions(searchTerm);
+      console.log('StoreSuggestions - Risultati ricerca manuale:', results.length);
       setSearchResults(results);
       
       if (results.length === 0) {

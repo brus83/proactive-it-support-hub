@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -136,9 +137,9 @@ const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
         .from('tickets')
         .select(`
           *,
-          category:category_id (id, name, color),
-          user:user_id (id, full_name, email),
-          assigned_user:assigned_to (id, full_name)
+          category:categories(id, name, color),
+          user:profiles!tickets_user_id_fkey(id, full_name, email),
+          assigned_user:profiles!tickets_assigned_to_fkey(id, full_name)
         `)
         .eq('id', ticketId)
         .single();
@@ -149,17 +150,39 @@ const TicketDetailDialog: React.FC<TicketDetailDialogProps> = ({
         .from('comments')
         .select(`
           *,
-          user:user_id (id, full_name, email)
+          user:profiles(id, full_name, email)
         `)
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false });
 
       if (commentsError) throw commentsError;
 
-      setTicket({
-        ...ticketData,
-        comments: commentsData || []
-      } as TicketDetail);
+      // Costruisco manualmente l'oggetto ticket con i tipi corretti
+      const ticketDetail: TicketDetail = {
+        id: ticketData.id,
+        title: ticketData.title,
+        description: ticketData.description,
+        status: ticketData.status,
+        priority: ticketData.priority,
+        category_id: ticketData.category_id,
+        category: ticketData.category as Category,
+        user_id: ticketData.user_id,
+        user: ticketData.user as { full_name: string | null; email: string },
+        assigned_to: ticketData.assigned_to,
+        assigned_user: ticketData.assigned_user as { full_name: string | null },
+        created_at: ticketData.created_at,
+        updated_at: ticketData.updated_at,
+        resolved_at: ticketData.resolved_at,
+        comments: commentsData?.map(comment => ({
+          id: comment.id,
+          content: comment.content,
+          created_at: comment.created_at,
+          user_id: comment.user_id,
+          user: comment.user as { full_name: string | null; email: string }
+        })) || []
+      };
+
+      setTicket(ticketDetail);
     } catch (error) {
       console.error('Errore nel caricamento dei dettagli del ticket:', error);
       toast.error('Errore nel caricamento dei dettagli del ticket');

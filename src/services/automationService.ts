@@ -42,24 +42,20 @@ export interface ScheduledIntervention {
 class AutomationService {
   async getKBSuggestions(searchText: string): Promise<KnowledgeBase[]> {
     try {
+      console.log('Ricerca KB - Input originale:', searchText);
+      
       if (!searchText || searchText.trim().length < 2) {
+        console.log('Testo di ricerca KB troppo breve');
         return [];
       }
 
-      // Pulisce il testo di ricerca da caratteri speciali che causano errori SQL
+      // Pulisce il testo di ricerca in modo più conservativo
       const cleanSearchText = searchText
-        .replace(/\n/g, ' ')
-        .replace(/\r/g, ' ')
-        .replace(/\t/g, ' ')
-        .replace(/[%_]/g, ' ')
         .trim()
+        .replace(/\s+/g, ' ') // Sostituisce spazi multipli con uno solo
         .substring(0, 100); // Limita la lunghezza
 
-      if (!cleanSearchText || cleanSearchText.length < 2) {
-        return [];
-      }
-
-      console.log('Ricerca KB con testo pulito:', cleanSearchText);
+      console.log('Ricerca KB - Testo pulito:', cleanSearchText);
 
       const { data, error } = await supabase
         .from('knowledge_base')
@@ -70,7 +66,7 @@ class AutomationService {
 
       if (error) {
         console.error('Errore ricerca KB:', error);
-        throw error;
+        return [];
       }
 
       console.log('Risultati KB trovati:', data?.length || 0);
