@@ -189,17 +189,25 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header with User Info */}
+        {/* Header with User Info and Logo */}
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Sistema Ticketing IT</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <p className="text-muted-foreground">
-                Benvenuto, {profile?.full_name || user?.email}
-              </p>
-              <Badge className={getRoleColor(profile?.role || 'user')}>
-                {getRoleLabel(profile?.role || 'user')}
-              </Badge>
+          <div className="flex items-center gap-4">
+            {/* Logo NAU! */}
+            <img 
+              src="/logo.png" 
+              alt="NAU! Logo" 
+              className="h-12 w-auto"
+            />
+            <div>
+              <h1 className="text-3xl font-bold">Sistema Ticketing IT</h1>
+              <div className="flex items-center gap-2 mt-2">
+                <p className="text-muted-foreground">
+                  Benvenuto, {profile?.full_name || user?.email}
+                </p>
+                <Badge className={getRoleColor(profile?.role || 'user')}>
+                  {getRoleLabel(profile?.role || 'user')}
+                </Badge>
+              </div>
             </div>
           </div>
           
@@ -322,22 +330,6 @@ const Dashboard = () => {
                             onView={handleTicketView}
                             onEdit={handleTicketEdit}
                           />
-                          {(profile?.role === 'admin' || profile?.role === 'technician') && 
-                           ticket.status === 'resolved' && (
-                            <div className="absolute top-4 right-4">
-                              <Button
-                                size="sm"
-                                onClick={() => handleCloseTicket(
-                                  ticket.id, 
-                                  ticket.title, 
-                                  ticket.contact_name || 'Cliente'
-                                )}
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                Chiudi Ticket
-                              </Button>
-                            </div>
-                          )}
                         </div>
                       ))
                     )}
