@@ -14,6 +14,7 @@ import TicketDetailDialog from "@/components/TicketDetailDialog";
 import TicketClosureDialog from "@/components/TicketClosureDialog";
 import AIKeySetup from "@/components/AIKeySetup";
 import { aiService } from "@/services/aiService";
+import ChatbotWidget from "@/components/ChatbotWidget";
 
 interface DatabaseTicket {
   id: string;
@@ -371,6 +372,9 @@ const Dashboard = () => {
           contactName={closureDialog.contactName}
           onTicketClosed={handleTicketClosed}
         />
+
+        {/* Chatbot Widget */}
+        <ChatbotWidget />
       </div>
     </div>
   );
