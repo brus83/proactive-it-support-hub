@@ -95,6 +95,55 @@ class WorkflowService {
     }));
   }
 
+  async getWorkflowExecution(ticketId: string): Promise<WorkflowExecution | null> {
+    const { data, error } = await supabase
+      .from('workflow_executions')
+      .select(`
+        *,
+        workflows (*)
+      `)
+      .eq('ticket_id', ticketId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // No rows found
+      throw error;
+    }
+
+    return {
+      ...data,
+      status: this.parseStatus(data.status),
+      data: this.parseData(data.data),
+      workflow: data.workflows ? {
+        ...data.workflows,
+        steps: this.parseSteps(data.workflows.steps)
+      } : undefined
+    };
+  }
+
+  async getWorkflowByCategory(categoryId: string): Promise<Workflow | null> {
+    const { data, error } = await supabase
+      .from('workflows')
+      .select('*')
+      .eq('category_id', categoryId)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // No rows found
+      throw error;
+    }
+    
+    return {
+      ...data,
+      steps: this.parseSteps(data.steps)
+    };
+  }
+
+  async startWorkflow(workflowId: string, ticketId: string): Promise<WorkflowExecution> {
+    return this.createWorkflowExecution(workflowId, ticketId);
+  }
+
   async createWorkflowExecution(workflowId: string, ticketId: string): Promise<WorkflowExecution> {
     const workflow = await this.getWorkflowById(workflowId);
     if (!workflow) throw new Error('Workflow not found');
@@ -115,6 +164,48 @@ class WorkflowService {
       .single();
 
     if (error) throw error;
+
+    return {
+      ...data,
+      status: this.parseStatus(data.status),
+      data: this.parseData(data.data),
+      workflow: data.workflows ? {
+        ...data.workflows,
+        steps: this.parseSteps(data.workflows.steps)
+      } : undefined
+    };
+  }
+
+  async advanceWorkflowStep(executionId: string): Promise<void> {
+    const execution = await this.getWorkflowExecutionById(executionId);
+    if (!execution) throw new Error('Workflow execution not found');
+
+    const nextStep = execution.current_step + 1;
+    const workflow = execution.workflow;
+    
+    if (!workflow || nextStep >= workflow.steps.length) {
+      // Complete the workflow
+      await this.completeWorkflow(executionId);
+      return;
+    }
+
+    await this.updateWorkflowStep(executionId, execution.current_step);
+  }
+
+  async getWorkflowExecutionById(executionId: string): Promise<WorkflowExecution | null> {
+    const { data, error } = await supabase
+      .from('workflow_executions')
+      .select(`
+        *,
+        workflows (*)
+      `)
+      .eq('id', executionId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
 
     return {
       ...data,

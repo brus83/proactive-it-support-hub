@@ -3,23 +3,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin } from "lucide-react";
-import { storeService } from "@/services/storeService";
+import { storeService, StoreLocation } from "@/services/storeService";
 
 interface StoreSuggestionsProps {
   ticketDescription: string;
 }
 
-interface StoreSuggestion {
-  id: string;
-  store_name: string;
-  store_code: string;
-  city: string;
-  address: string;
-  relevance_score: number;
-}
-
 const StoreSuggestions = ({ ticketDescription }: StoreSuggestionsProps) => {
-  const [suggestions, setSuggestions] = useState<StoreSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<StoreLocation[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -76,7 +67,7 @@ const StoreSuggestions = ({ ticketDescription }: StoreSuggestionsProps) => {
               {store.address}, {store.city}
             </p>
             <div className="text-xs text-muted-foreground mt-1">
-              Rilevanza: {(store.relevance_score * 100).toFixed(0)}%
+              Rilevanza: {((store.relevance_score || 0.5) * 100).toFixed(0)}%
             </div>
           </div>
         ))}
