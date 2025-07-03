@@ -42,7 +42,10 @@ export const workflowService = {
       return null;
     }
 
-    return data;
+    return {
+      ...data,
+      steps: Array.isArray(data.steps) ? data.steps as WorkflowStep[] : []
+    };
   },
 
   async getAllWorkflows(): Promise<Workflow[]> {
@@ -57,7 +60,10 @@ export const workflowService = {
       return [];
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      ...item,
+      steps: Array.isArray(item.steps) ? item.steps as WorkflowStep[] : []
+    }));
   },
 
   async startWorkflow(workflowId: string, ticketId: string): Promise<string | null> {
@@ -95,7 +101,14 @@ export const workflowService = {
       return null;
     }
 
-    return data;
+    return {
+      ...data,
+      status: data.status as 'pending' | 'in_progress' | 'completed' | 'cancelled',
+      workflow: data.workflow ? {
+        ...data.workflow,
+        steps: Array.isArray(data.workflow.steps) ? data.workflow.steps as WorkflowStep[] : []
+      } : undefined
+    };
   },
 
   async advanceWorkflowStep(executionId: string, notes?: string): Promise<boolean> {
@@ -110,8 +123,12 @@ export const workflowService = {
       return false;
     }
 
+    const workflow = {
+      ...execution.workflow,
+      steps: Array.isArray(execution.workflow.steps) ? execution.workflow.steps as WorkflowStep[] : []
+    };
+    
     const nextStep = execution.current_step + 1;
-    const workflow = execution.workflow as Workflow;
     const isCompleted = nextStep >= workflow.steps.length;
 
     const { error: updateError } = await supabase
@@ -143,7 +160,10 @@ export const workflowService = {
   async createWorkflow(workflow: Omit<Workflow, 'id'>): Promise<boolean> {
     const { error } = await supabase
       .from('workflows')
-      .insert([workflow]);
+      .insert([{
+        ...workflow,
+        steps: workflow.steps as any
+      }]);
 
     if (error) {
       console.error('Error creating workflow:', error);

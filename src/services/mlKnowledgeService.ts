@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { sanitizeSearchQuery, sanitizeText } from "@/utils/sanitizer";
 
@@ -398,17 +399,19 @@ class MLKnowledgeService {
       const { data: feedbackLogs, error } = await supabase
         .from('automation_logs')
         .select('action_details, success, triggered_at')
-        .eq('action_type', 'kb_suggestion')
-        .not('action_details->ml_feedback', 'is', null);
+        .eq('action_type', 'kb_suggestion');
 
       if (error) {
         console.error('ML: Errore nel recuperare statistiche:', error);
         throw error;
       }
 
-      const mlFeedbackLogs = feedbackLogs?.filter(log => 
-        log.action_details && log.action_details.ml_feedback === true
-      ) || [];
+      const mlFeedbackLogs = feedbackLogs?.filter(log => {
+        if (typeof log.action_details === 'object' && log.action_details !== null) {
+          return (log.action_details as any).ml_feedback === true;
+        }
+        return false;
+      }) || [];
 
       const totalSuggestions = mlFeedbackLogs.length;
       const helpfulSuggestions = mlFeedbackLogs.filter(log => log.success).length;

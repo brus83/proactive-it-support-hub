@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Comment, MessageSquare, MapPin, BookOpenCheck, Lightbulb, Send, Loader2 } from "lucide-react";
+import { MessageCircle, MessageSquare, MapPin, BookOpenCheck, Lightbulb, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Textarea } from "@/components/ui/textarea";
@@ -221,7 +222,7 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
               <CardContent className="space-y-4">
                 {comments.length === 0 ? (
                   <div className="text-center py-4 text-gray-500">
-                    <Comment className="h-5 w-5 mx-auto mb-2" />
+                    <MessageCircle className="h-5 w-5 mx-auto mb-2" />
                     Nessun commento presente
                   </div>
                 ) : (
