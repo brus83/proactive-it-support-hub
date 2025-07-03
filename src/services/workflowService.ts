@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface WorkflowStep {
@@ -103,12 +102,10 @@ class WorkflowService {
         workflows (*)
       `)
       .eq('ticket_id', ticketId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // No rows found
-      throw error;
-    }
+    if (error) throw error;
+    if (!data) return null;
 
     return {
       ...data,
