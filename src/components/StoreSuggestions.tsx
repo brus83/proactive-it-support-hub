@@ -31,7 +31,7 @@ const StoreSuggestions = ({ ticketDescription }: StoreSuggestionsProps) => {
   const searchStores = async () => {
     setLoading(true);
     try {
-      const results = await storeService.searchStores(ticketDescription);
+      const results = await storeService.getStoreSuggestions(ticketDescription);
       setSuggestions(results.slice(0, 3));
     } catch (error) {
       console.error('Error searching stores:', error);

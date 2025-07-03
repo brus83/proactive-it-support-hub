@@ -4,17 +4,24 @@ import { supabase } from "@/integrations/supabase/client";
 export interface WorkflowStep {
   name: string;
   type: 'auto' | 'manual' | 'approval';
-  role?: string;
   description: string;
+  role?: 'admin' | 'technician' | 'manager' | 'user';
+  assignedTo?: string;
+  completed?: boolean;
+  completedAt?: string;
+  completedBy?: string;
+  notes?: string;
 }
 
 export interface Workflow {
   id: string;
   name: string;
-  category_id?: string;
   description?: string;
-  is_active: boolean;
+  category_id?: string;
   steps: WorkflowStep[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WorkflowExecution {
@@ -25,151 +32,182 @@ export interface WorkflowExecution {
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   assigned_to?: string;
   data: Record<string, any>;
+  created_at: string;
+  updated_at: string;
   workflow?: Workflow;
 }
 
-export const workflowService = {
-  async getWorkflowByCategory(categoryId: string): Promise<Workflow | null> {
+class WorkflowService {
+  async getWorkflowById(workflowId: string): Promise<Workflow | null> {
     const { data, error } = await supabase
       .from('workflows')
       .select('*')
-      .eq('category_id', categoryId)
-      .eq('is_active', true)
+      .eq('id', workflowId)
       .single();
 
-    if (error) {
-      console.error('Error fetching workflow:', error);
-      return null;
-    }
-
+    if (error) throw error;
+    
     return {
       ...data,
-      steps: Array.isArray(data.steps) ? data.steps as WorkflowStep[] : []
+      steps: this.parseSteps(data.steps)
     };
-  },
+  }
 
-  async getAllWorkflows(): Promise<Workflow[]> {
+  async getWorkflows(): Promise<Workflow[]> {
     const { data, error } = await supabase
       .from('workflows')
       .select('*')
       .eq('is_active', true)
       .order('name');
 
-    if (error) {
-      console.error('Error fetching workflows:', error);
-      return [];
-    }
+    if (error) throw error;
 
-    return (data || []).map(item => ({
-      ...item,
-      steps: Array.isArray(item.steps) ? item.steps as WorkflowStep[] : []
+    return (data || []).map(workflow => ({
+      ...workflow,
+      steps: this.parseSteps(workflow.steps)
     }));
-  },
+  }
 
-  async startWorkflow(workflowId: string, ticketId: string): Promise<string | null> {
-    const { data, error } = await supabase
-      .from('workflow_executions')
-      .insert([{
-        workflow_id: workflowId,
-        ticket_id: ticketId,
-        current_step: 0,
-        status: 'pending'
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error starting workflow:', error);
-      return null;
-    }
-
-    return data.id;
-  },
-
-  async getWorkflowExecution(ticketId: string): Promise<WorkflowExecution | null> {
-    const { data, error } = await supabase
+  async getWorkflowExecutions(ticketId?: string): Promise<WorkflowExecution[]> {
+    let query = supabase
       .from('workflow_executions')
       .select(`
         *,
-        workflow:workflows(*)
+        workflows (*)
+      `);
+
+    if (ticketId) {
+      query = query.eq('ticket_id', ticketId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(execution => ({
+      ...execution,
+      status: this.parseStatus(execution.status),
+      data: this.parseData(execution.data),
+      workflow: execution.workflows ? {
+        ...execution.workflows,
+        steps: this.parseSteps(execution.workflows.steps)
+      } : undefined
+    }));
+  }
+
+  async createWorkflowExecution(workflowId: string, ticketId: string): Promise<WorkflowExecution> {
+    const workflow = await this.getWorkflowById(workflowId);
+    if (!workflow) throw new Error('Workflow not found');
+
+    const { data, error } = await supabase
+      .from('workflow_executions')
+      .insert({
+        workflow_id: workflowId,
+        ticket_id: ticketId,
+        current_step: 0,
+        status: 'pending',
+        data: {}
+      })
+      .select(`
+        *,
+        workflows (*)
       `)
-      .eq('ticket_id', ticketId)
       .single();
 
-    if (error) {
-      console.error('Error fetching workflow execution:', error);
-      return null;
-    }
+    if (error) throw error;
 
     return {
       ...data,
-      status: data.status as 'pending' | 'in_progress' | 'completed' | 'cancelled',
-      workflow: data.workflow ? {
-        ...data.workflow,
-        steps: Array.isArray(data.workflow.steps) ? data.workflow.steps as WorkflowStep[] : []
+      status: this.parseStatus(data.status),
+      data: this.parseData(data.data),
+      workflow: data.workflows ? {
+        ...data.workflows,
+        steps: this.parseSteps(data.workflows.steps)
       } : undefined
     };
-  },
+  }
 
-  async advanceWorkflowStep(executionId: string, notes?: string): Promise<boolean> {
-    const { data: execution, error: fetchError } = await supabase
-      .from('workflow_executions')
-      .select('*, workflow:workflows(*)')
-      .eq('id', executionId)
-      .single();
-
-    if (fetchError) {
-      console.error('Error fetching execution:', fetchError);
-      return false;
-    }
-
-    const workflow = {
-      ...execution.workflow,
-      steps: Array.isArray(execution.workflow.steps) ? execution.workflow.steps as WorkflowStep[] : []
-    };
-    
-    const nextStep = execution.current_step + 1;
-    const isCompleted = nextStep >= workflow.steps.length;
-
-    const { error: updateError } = await supabase
+  async updateWorkflowStep(executionId: string, stepNumber: number, notes?: string): Promise<void> {
+    const { error } = await supabase
       .from('workflow_executions')
       .update({
-        current_step: nextStep,
-        status: isCompleted ? 'completed' : 'in_progress'
+        current_step: stepNumber + 1,
+        status: 'in_progress',
+        updated_at: new Date().toISOString()
       })
       .eq('id', executionId);
 
-    if (updateError) {
-      console.error('Error updating workflow execution:', updateError);
-      return false;
-    }
+    if (error) throw error;
 
     // Log the action
     await supabase
       .from('workflow_logs')
-      .insert([{
+      .insert({
         workflow_execution_id: executionId,
-        step_number: execution.current_step,
+        step_number: stepNumber,
         action: 'step_completed',
-        notes: notes || `Completato step: ${workflow.steps[execution.current_step]?.name}`
-      }]);
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        notes
+      });
+  }
 
-    return true;
-  },
+  async completeWorkflow(executionId: string): Promise<void> {
+    const { error } = await supabase
+      .from('workflow_executions')
+      .update({
+        status: 'completed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', executionId);
 
-  async createWorkflow(workflow: Omit<Workflow, 'id'>): Promise<boolean> {
+    if (error) throw error;
+  }
+
+  async createWorkflows(workflows: Omit<Workflow, 'id'>[]): Promise<void> {
+    const workflowsToInsert = workflows.map(workflow => ({
+      ...workflow,
+      steps: JSON.stringify(workflow.steps)
+    }));
+
     const { error } = await supabase
       .from('workflows')
-      .insert([{
-        ...workflow,
-        steps: workflow.steps as any
-      }]);
+      .insert(workflowsToInsert);
 
-    if (error) {
-      console.error('Error creating workflow:', error);
-      return false;
-    }
-
-    return true;
+    if (error) throw error;
   }
-};
+
+  private parseSteps(steps: any): WorkflowStep[] {
+    if (Array.isArray(steps)) {
+      return steps as WorkflowStep[];
+    }
+    if (typeof steps === 'string') {
+      try {
+        return JSON.parse(steps);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  private parseStatus(status: any): 'pending' | 'in_progress' | 'completed' | 'cancelled' {
+    const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    return validStatuses.includes(status) ? status : 'pending';
+  }
+
+  private parseData(data: any): Record<string, any> {
+    if (typeof data === 'object' && data !== null) {
+      return data as Record<string, any>;
+    }
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+}
+
+export const workflowService = new WorkflowService();
