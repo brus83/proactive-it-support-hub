@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { sanitizeSearchQuery, sanitizeText } from "@/utils/sanitizer";
 
@@ -408,7 +407,8 @@ class MLKnowledgeService {
 
       const mlFeedbackLogs = feedbackLogs?.filter(log => {
         if (typeof log.action_details === 'object' && log.action_details !== null) {
-          return (log.action_details as any).ml_feedback === true;
+          const details = log.action_details as Record<string, any>;
+          return details.ml_feedback === true;
         }
         return false;
       }) || [];
