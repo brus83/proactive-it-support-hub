@@ -15,6 +15,7 @@ import TicketClosureDialog from "@/components/TicketClosureDialog";
 import AIKeySetup from "@/components/AIKeySetup";
 import { aiService } from "@/services/aiService";
 import ChatbotWidget from "@/components/ChatbotWidget";
+import AdminMenuButton from "@/components/AdminMenuButton";
 
 interface DatabaseTicket {
   id: string;
@@ -238,6 +239,9 @@ const Dashboard = () => {
                 </Button>
               </Link>
             )}
+
+            {/* Menu Amministrazione */}
+            <AdminMenuButton />
             
             <Button 
               size="lg" 
