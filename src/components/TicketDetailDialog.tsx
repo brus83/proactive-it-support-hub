@@ -18,6 +18,7 @@ import MLSuggestionsWidget from "./MLSuggestionsWidget";
 import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
 import WorkflowWidget from './WorkflowWidget';
 import TicketClosureDialog from "./TicketClosureDialog";
+import ReminderManager from "./ReminderManager";
 
 interface TicketDetailDialogProps {
   isOpen: boolean;
@@ -334,6 +335,9 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
 
               {/* Sidebar - Suggerimenti */}
               <div className="space-y-6">
+                {/* Reminder Manager */}
+                <ReminderManager ticketId={ticket.id} />
+
                 {/* ML Suggestions Widget */}
                 <MLSuggestionsWidget
                   ticketTitle={ticket.title}

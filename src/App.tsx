@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import NotificationSettingsComponent from "@/components/NotificationSettings";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Statistics from "./pages/Statistics";
@@ -105,7 +106,9 @@ const App = () => (
             } />
             <Route path="/admin/notifications" element={
               <ProtectedRoute>
-                <div className="p-6"><h1>Gestione Notifiche - In sviluppo</h1></div>
+                <div className="p-6">
+                  <NotificationSettingsComponent />
+                </div>
               </ProtectedRoute>
             } />
             <Route path="/admin/security" element={

@@ -16,6 +16,7 @@ import AIKeySetup from "@/components/AIKeySetup";
 import { aiService } from "@/services/aiService";
 import ChatbotWidget from "@/components/ChatbotWidget";
 import AdminMenuButton from "@/components/AdminMenuButton";
+import NotificationCenter from "@/components/NotificationCenter";
 
 interface DatabaseTicket {
   id: string;
@@ -242,6 +243,9 @@ const Dashboard = () => {
 
             {/* Menu Amministrazione */}
             <AdminMenuButton />
+
+            {/* Centro Notifiche */}
+            <NotificationCenter />
             
             <Button 
               size="lg" 
