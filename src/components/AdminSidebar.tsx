@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Home,
   BarChart3,
-  Zap
+  Zap,
+  FolderOpen
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -67,16 +68,25 @@ const AdminSidebar = ({ isOpen, onClose }: AdminSidebarProps) => {
       ]
     },
     {
+      id: 'content',
+      title: 'Gestione Contenuti',
+      icon: FileText,
+      expandable: true,
+      items: [
+        { path: '/admin/categories', icon: Database, label: 'Categorie', badge: null },
+        { path: '/admin/documents', icon: FolderOpen, label: 'Documenti', badge: 'New' },
+        { path: '/admin/forms', icon: FileText, label: 'Moduli e Campi', badge: null },
+        { path: '/admin/workflows', icon: Settings, label: 'Workflow', badge: null },
+      ]
+    },
+    {
       id: 'customization',
       title: 'Personalizzazione',
       icon: Palette,
       expandable: true,
       items: [
         { path: '/admin/interface', icon: Palette, label: 'Interfaccia', badge: null },
-        { path: '/admin/forms', icon: FileText, label: 'Moduli e Campi', badge: null },
-        { path: '/admin/workflows', icon: Settings, label: 'Workflow', badge: null },
         { path: '/admin/notifications', icon: Bell, label: 'Notifiche', badge: null },
-        { path: '/admin/categories', icon: Database, label: 'Categorie', badge: null },
       ]
     },
     {
@@ -97,7 +107,7 @@ const AdminSidebar = ({ isOpen, onClose }: AdminSidebarProps) => {
   const filteredSections = menuSections.filter(section => {
     if (profile?.role === 'admin') return true;
     if (profile?.role === 'technician') {
-      return ['main', 'customization'].includes(section.id);
+      return ['main', 'content', 'customization'].includes(section.id);
     }
     return section.id === 'main';
   });

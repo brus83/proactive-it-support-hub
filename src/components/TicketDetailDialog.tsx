@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, MessageSquare, MapPin, BookOpenCheck, Lightbulb, Send, Loader2, X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MessageCircle, MessageSquare, MapPin, BookOpenCheck, Lightbulb, Send, Loader2, X, FolderOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +20,7 @@ import KnowledgeBaseWidget from "./KnowledgeBaseWidget";
 import WorkflowWidget from './WorkflowWidget';
 import TicketClosureDialog from "./TicketClosureDialog";
 import ReminderManager from "./ReminderManager";
+import DocumentManager from "./DocumentManager";
 
 interface TicketDetailDialogProps {
   isOpen: boolean;
@@ -65,6 +67,7 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [activeTab, setActiveTab] = useState('comments');
   const [closureDialog, setClosureDialog] = useState({
     isOpen: false,
     ticketId: '',
@@ -208,7 +211,7 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
             </div>
           ) : ticket ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Colonna principale - Ticket e Commenti */}
+              {/* Colonna principale - Ticket, Commenti e Documenti */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Informazioni principali del ticket */}
                 <Card>
@@ -263,74 +266,91 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
                 {/* Workflow Widget */}
                 <WorkflowWidget ticketId={ticketId} />
 
-                {/* Sezione commenti */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <DialogTitle className="text-base">
-                      <MessageSquare className="mr-2 h-4 w-4 inline-block" />
-                      Commenti
-                    </DialogTitle>
-                    <Badge variant="secondary">{comments.length}</Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {comments.length === 0 ? (
-                      <div className="text-center py-4 text-gray-500">
-                        <MessageCircle className="h-5 w-5 mx-auto mb-2" />
-                        Nessun commento presente
-                      </div>
-                    ) : (
-                      comments.map((comment) => (
-                        <div key={comment.id} className="space-y-2">
-                          <div className="flex items-start space-x-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={`https://avatar.vercel.sh/${comment?.profiles?.full_name}.png`} />
-                              <AvatarFallback>{comment?.profiles?.full_name?.charAt(0).toUpperCase() || 'UT'}</AvatarFallback>
-                            </Avatar>
-                            <div className="space-y-1">
-                              <div className="text-sm font-bold">{comment?.profiles?.full_name || 'Utente Sconosciuto'}</div>
-                              <p className="text-sm text-gray-500">{formatDate(comment.created_at)}</p>
-                              <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Tabs per Commenti e Documenti */}
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="comments" className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Commenti ({comments.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="documents" className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4" />
+                      Documenti
+                    </TabsTrigger>
+                  </TabsList>
 
-                {/* Form per nuovo commento */}
-                <Card>
-                  <CardContent>
-                    <form onSubmit={handleSubmitComment} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="comment">Aggiungi un commento</Label>
-                        <Textarea
-                          id="comment"
-                          placeholder="Scrivi il tuo commento..."
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          required
-                          rows={4}
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button type="submit" disabled={isSubmittingComment}>
-                          {isSubmittingComment ? (
-                            <>
-                              Invio...
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                            </>
-                          ) : (
-                            <>
-                              Invia
-                              <Send className="ml-2 h-4 w-4" />
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-                  </CardContent>
-                </Card>
+                  <TabsContent value="comments" className="space-y-4">
+                    {/* Sezione commenti */}
+                    <Card>
+                      <CardContent className="space-y-4 pt-6">
+                        {comments.length === 0 ? (
+                          <div className="text-center py-4 text-gray-500">
+                            <MessageCircle className="h-5 w-5 mx-auto mb-2" />
+                            Nessun commento presente
+                          </div>
+                        ) : (
+                          comments.map((comment) => (
+                            <div key={comment.id} className="space-y-2">
+                              <div className="flex items-start space-x-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={`https://avatar.vercel.sh/${comment?.profiles?.full_name}.png`} />
+                                  <AvatarFallback>{comment?.profiles?.full_name?.charAt(0).toUpperCase() || 'UT'}</AvatarFallback>
+                                </Avatar>
+                                <div className="space-y-1">
+                                  <div className="text-sm font-bold">{comment?.profiles?.full_name || 'Utente Sconosciuto'}</div>
+                                  <p className="text-sm text-gray-500">{formatDate(comment.created_at)}</p>
+                                  <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Form per nuovo commento */}
+                    <Card>
+                      <CardContent>
+                        <form onSubmit={handleSubmitComment} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="comment">Aggiungi un commento</Label>
+                            <Textarea
+                              id="comment"
+                              placeholder="Scrivi il tuo commento..."
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              required
+                              rows={4}
+                            />
+                          </div>
+                          <div className="flex justify-end">
+                            <Button type="submit" disabled={isSubmittingComment}>
+                              {isSubmittingComment ? (
+                                <>
+                                  Invio...
+                                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                                </>
+                              ) : (
+                                <>
+                                  Invia
+                                  <Send className="ml-2 h-4 w-4" />
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="documents" className="space-y-4">
+                    {/* Gestione Documenti */}
+                    <DocumentManager
+                      ticketId={ticketId}
+                      defaultTab="view"
+                    />
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Sidebar - Suggerimenti */}

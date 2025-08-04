@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import UsersPage from "./pages/admin/Users";
 import AuditLogsPage from "./pages/admin/AuditLogs";
 import CategoriesPage from "./pages/admin/Categories";
+import DocumentsAdminPage from "./pages/admin/Documents";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,11 @@ const App = () => (
             <Route path="/admin/categories" element={
               <ProtectedRoute>
                 <CategoriesPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/documents" element={
+              <ProtectedRoute>
+                <DocumentsAdminPage />
               </ProtectedRoute>
             } />
             
