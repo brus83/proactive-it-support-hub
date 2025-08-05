@@ -209,6 +209,10 @@ class DocumentService {
       ...item,
       uploader: item.uploader || undefined
     }));
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
+      throw error;
+    }
   }
 
   // Get download URL for attachment
