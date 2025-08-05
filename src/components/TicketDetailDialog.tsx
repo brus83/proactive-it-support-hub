@@ -347,7 +347,7 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
                     {/* Gestione Documenti */}
                     <DocumentManager
                       ticketId={ticketId}
-                      defaultTab="view"
+                      mode="ticket"
                     />
                   </TabsContent>
                 </Tabs>

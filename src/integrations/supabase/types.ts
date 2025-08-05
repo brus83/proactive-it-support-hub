@@ -582,6 +582,62 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_attachments: {
+        Row: {
+          created_at: string
+          download_count: number
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          is_public: boolean
+          metadata: Json | null
+          mime_type: string
+          ticket_id: string
+          updated_at: string
+          uploaded_by: string | null
+          virus_scan_status: string
+        }
+        Insert: {
+          created_at?: string
+          download_count?: number
+          file_name: string
+          file_path: string
+          file_size: number
+          id?: string
+          is_public?: boolean
+          metadata?: Json | null
+          mime_type: string
+          ticket_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+          virus_scan_status?: string
+        }
+        Update: {
+          created_at?: string
+          download_count?: number
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          is_public?: boolean
+          metadata?: Json | null
+          mime_type?: string
+          ticket_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          virus_scan_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_attachments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_reminders: {
         Row: {
           created_at: string
@@ -933,6 +989,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["user_role"]
         }
         Returns: boolean
+      }
+      increment_download_count: {
+        Args: { attachment_id: string }
+        Returns: undefined
       }
       is_admin_or_tech: {
         Args: { _user_id: string }
