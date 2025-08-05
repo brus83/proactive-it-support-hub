@@ -192,6 +192,7 @@ class DocumentService {
 
   // Get attachments for a ticket
   async getTicketAttachments(ticketId: string): Promise<TicketAttachment[]> {
+    try {
     const { data, error } = await supabase
       .from('ticket_attachments')
       .select(`

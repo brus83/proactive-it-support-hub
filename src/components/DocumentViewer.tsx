@@ -39,11 +39,13 @@ const DocumentViewer = ({ ticketId, onDocumentDeleted, className }: DocumentView
 
   const loadAttachments = async () => {
     try {
+      console.log('Loading attachments for ticket:', ticketId);
       const data = await documentService.getTicketAttachments(ticketId);
+      console.log('Attachments loaded:', data.length);
       setAttachments(data);
     } catch (error) {
       console.error('Error loading attachments:', error);
-      toast.error("Errore nel caricamento dei documenti");
+      toast.error(error instanceof Error ? error.message : "Errore nel caricamento dei documenti");
     } finally {
       setLoading(false);
     }

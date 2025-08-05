@@ -72,11 +72,21 @@ const DocumentUploader = ({ ticketId, onUploadComplete, className }: DocumentUpl
     setIsUploading(true);
     setUploads(files.map(file => ({
       file,
-      progress: 0,
+        // Basic validation here since validateFile is private
+        if (file.size > 50 * 1024 * 1024) {
+          throw new Error(`Il file ${file.name} è troppo grande. Dimensione massima: 50MB`);
+        }
+        if (file.size === 0) {
+          throw new Error(`Il file ${file.name} è vuoto`);
+        }
+        if (file.name.includes('..') || file.name.includes('/') || file.name.includes('\\')) {
+          throw new Error(`Nome file non valido: ${file.name}`);
+        }
       status: 'uploading'
     })));
 
     try {
+      console.log('Starting upload for', files.length, 'files to ticket:', ticketId);
       await documentService.uploadFiles(
         ticketId,
         files,
