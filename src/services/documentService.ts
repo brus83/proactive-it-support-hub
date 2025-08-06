@@ -41,6 +41,28 @@ class DocumentService {
     'application/zip', 'application/x-zip-compressed'
   ];
 
+  // Helper to transform Supabase data to TicketAttachment interface
+  private transformToTicketAttachment(item: any): TicketAttachment {
+    return {
+      id: item.id,
+      ticket_id: item.ticket_id,
+      file_name: item.file_name,
+      file_path: item.file_path,
+      file_size: item.file_size,
+      mime_type: item.mime_type,
+      uploaded_by: item.uploaded_by || '',
+      is_public: item.is_public,
+      download_count: item.download_count,
+      virus_scan_status: item.virus_scan_status as 'pending' | 'clean' | 'infected' | 'error',
+      metadata: typeof item.metadata === 'object' ? item.metadata as Record<string, any> : {},
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      uploader: item.uploader && typeof item.uploader === 'object' && item.uploader !== null
+        ? { full_name: (item.uploader as any)?.full_name || 'Unknown' } 
+        : undefined
+    };
+  }
+
   // Initialize storage bucket if it doesn't exist
   async initializeStorage(): Promise<void> {
     try {
@@ -142,8 +164,22 @@ class DocumentService {
       if (onProgress) onProgress(100);
 
       return {
-        ...attachment,
-        uploader: attachment.uploader || undefined
+        id: attachment.id,
+        ticket_id: attachment.ticket_id,
+        file_name: attachment.file_name,
+        file_path: attachment.file_path,
+        file_size: attachment.file_size,
+        mime_type: attachment.mime_type,
+        uploaded_by: attachment.uploaded_by || '',
+        is_public: attachment.is_public,
+        download_count: attachment.download_count,
+        virus_scan_status: attachment.virus_scan_status as 'pending' | 'clean' | 'infected' | 'error',
+        metadata: typeof attachment.metadata === 'object' ? attachment.metadata as Record<string, any> : {},
+        created_at: attachment.created_at,
+        updated_at: attachment.updated_at,
+        uploader: attachment.uploader && typeof attachment.uploader === 'object' && attachment.uploader !== null
+          ? { full_name: (attachment.uploader as any)?.full_name || 'Unknown' } 
+          : undefined
       };
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -205,10 +241,7 @@ class DocumentService {
 
     if (error) throw error;
 
-    return (data || []).map(item => ({
-      ...item,
-      uploader: item.uploader || undefined
-    }));
+    return (data || []).map(item => this.transformToTicketAttachment(item));
     } catch (error) {
       console.error('Error fetching attachments:', error);
       throw error;
@@ -300,10 +333,7 @@ class DocumentService {
 
     if (error) throw error;
 
-    return (data || []).map(item => ({
-      ...item,
-      uploader: item.uploader || undefined
-    }));
+    return (data || []).map(item => this.transformToTicketAttachment(item));
   }
 
   // Get storage usage statistics
