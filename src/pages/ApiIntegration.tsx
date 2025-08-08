@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Settings, Zap, CheckCircle, AlertTriangle, ExternalLink, Database, Sync } from "lucide-react";
+import { ArrowLeft, Settings, Zap, CheckCircle, AlertTriangle, ExternalLink, Database, FolderSync as Sync } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
