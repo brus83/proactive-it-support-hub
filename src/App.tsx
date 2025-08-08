@@ -13,6 +13,8 @@ import ImportData from "./pages/ImportData";
 import Automation from "./pages/Automation";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import SelfService from "./pages/SelfService";
+import ApiIntegration from "./pages/ApiIntegration";
 
 // Admin pages
 import UsersPage from "./pages/admin/Users";
@@ -54,6 +56,14 @@ const App = () => (
             <Route path="/automation" element={
               <ProtectedRoute>
                 <Automation />
+              </ProtectedRoute>
+            } />
+            <Route path="/self-service" element={
+              <SelfService />
+            } />
+            <Route path="/api-integration" element={
+              <ProtectedRoute requiredRole="admin">
+                <ApiIntegration />
               </ProtectedRoute>
             } />
             

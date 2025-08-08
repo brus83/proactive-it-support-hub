@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, AlertTriangle } from "lucide-react";
 
@@ -14,6 +14,7 @@ interface TicketMergeDialogProps {
   onClose: () => void;
   sourceTicketId: string;
   sourceTicketTitle: string;
+  onTicketMerged?: () => void;
 }
 
 interface SearchResult {
@@ -25,14 +26,19 @@ interface SearchResult {
   created_at: string;
 }
 
-export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicketTitle }: TicketMergeDialogProps) {
+export function TicketMergeDialog({ 
+  isOpen, 
+  onClose, 
+  sourceTicketId, 
+  sourceTicketTitle,
+  onTicketMerged 
+}: TicketMergeDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [selectedTargetTicket, setSelectedTargetTicket] = useState<string>("");
   const [mergeReason, setMergeReason] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
 
   const searchTickets = async () => {
     if (!searchQuery.trim()) return;
@@ -43,7 +49,7 @@ export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicke
         .from('tickets')
         .select('id, title, description, status, priority, created_at')
         .neq('id', sourceTicketId)
-        .eq('is_merged', false)
+        .neq('status', 'closed')
         .or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
         .limit(10);
 
@@ -51,11 +57,7 @@ export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicke
       setSearchResults(data || []);
     } catch (error) {
       console.error('Error searching tickets:', error);
-      toast({
-        title: "Errore",
-        description: "Errore durante la ricerca dei ticket",
-        variant: "destructive"
-      });
+      toast.error("Errore durante la ricerca dei ticket");
     } finally {
       setIsSearching(false);
     }
@@ -63,17 +65,12 @@ export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicke
 
   const handleMergeTickets = async () => {
     if (!selectedTargetTicket || !mergeReason.trim()) {
-      toast({
-        title: "Errore",
-        description: "Seleziona un ticket di destinazione e inserisci il motivo della fusione",
-        variant: "destructive"
-      });
+      toast.error("Seleziona un ticket di destinazione e inserisci il motivo della fusione");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Start transaction
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
@@ -81,26 +78,13 @@ export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicke
       const { error: updateError } = await supabase
         .from('tickets')
         .update({
-          is_merged: true,
-          merged_into_ticket_id: selectedTargetTicket,
           status: 'closed',
-          resolved_at: new Date().toISOString()
+          resolved_at: new Date().toISOString(),
+          resolution_notes: `Ticket unito con #${selectedTargetTicket}. Motivo: ${mergeReason}`
         })
         .eq('id', sourceTicketId);
 
       if (updateError) throw updateError;
-
-      // Create merge history record
-      const { error: mergeError } = await supabase
-        .from('ticket_merges')
-        .insert({
-          source_ticket_id: sourceTicketId,
-          target_ticket_id: selectedTargetTicket,
-          merged_by: user.id,
-          merge_reason: mergeReason
-        });
-
-      if (mergeError) throw mergeError;
 
       // Copy comments from source to target ticket
       const { data: comments } = await supabase
@@ -110,30 +94,36 @@ export function TicketMergeDialog({ isOpen, onClose, sourceTicketId, sourceTicke
 
       if (comments && comments.length > 0) {
         const newComments = comments.map(comment => ({
-          ...comment,
-          id: undefined, // Let database generate new ID
           ticket_id: selectedTargetTicket,
-          content: `[Unito da ticket #${sourceTicketId}] ${comment.content}`
+          user_id: comment.user_id,
+          content: `[Unito da ticket #${sourceTicketId.substring(0, 8)}] ${comment.content}`,
+          created_at: comment.created_at
         }));
 
         await supabase.from('comments').insert(newComments);
       }
 
-      toast({
-        title: "Successo",
-        description: "Ticket uniti con successo"
-      });
+      // Add merge comment to target ticket
+      await supabase
+        .from('comments')
+        .insert({
+          ticket_id: selectedTargetTicket,
+          user_id: user.id,
+          content: `Ticket #${sourceTicketId.substring(0, 8)} unito a questo ticket. Motivo: ${mergeReason}`
+        });
 
+      toast.success("Ticket uniti con successo");
+      onTicketMerged?.();
       onClose();
-      // Refresh the page to show updated data
-      window.location.reload();
+      
+      // Reset form
+      setSearchQuery("");
+      setSearchResults([]);
+      setSelectedTargetTicket("");
+      setMergeReason("");
     } catch (error) {
       console.error('Error merging tickets:', error);
-      toast({
-        title: "Errore",
-        description: "Errore durante l'unione dei ticket",
-        variant: "destructive"
-      });
+      toast.error("Errore durante l'unione dei ticket");
     } finally {
       setIsSubmitting(false);
     }

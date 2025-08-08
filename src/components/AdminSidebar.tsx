@@ -53,6 +53,8 @@ const AdminSidebar = ({ isOpen, onClose }: AdminSidebarProps) => {
         { path: '/dashboard', icon: Home, label: 'Dashboard', badge: null },
         { path: '/statistics', icon: BarChart3, label: 'Statistiche', badge: null },
         { path: '/automation', icon: Zap, label: 'Automazione', badge: 'Pro' },
+        { path: '/self-service', icon: HelpCircle, label: 'Self-Service Portal', badge: null },
+        { path: '/api-integration', icon: LinkIcon, label: 'Integrazioni API', badge: 'New' },
       ]
     },
     {
