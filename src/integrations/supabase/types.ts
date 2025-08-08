@@ -582,6 +582,57 @@ export type Database = {
         }
         Relationships: []
       }
+      technician_skills: {
+        Row: {
+          created_at: string
+          id: string
+          skill_level: number | null
+          skill_name: string
+          technician_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          skill_level?: number | null
+          skill_name: string
+          technician_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          skill_level?: number | null
+          skill_name?: string
+          technician_id?: string
+        }
+        Relationships: []
+      }
+      technician_workload: {
+        Row: {
+          current_tickets: number | null
+          id: string
+          is_available: boolean | null
+          max_capacity: number | null
+          technician_id: string
+          updated_at: string
+        }
+        Insert: {
+          current_tickets?: number | null
+          id?: string
+          is_available?: boolean | null
+          max_capacity?: number | null
+          technician_id: string
+          updated_at?: string
+        }
+        Update: {
+          current_tickets?: number | null
+          id?: string
+          is_available?: boolean | null
+          max_capacity?: number | null
+          technician_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ticket_attachments: {
         Row: {
           created_at: string
@@ -632,6 +683,51 @@ export type Database = {
           {
             foreignKeyName: "ticket_attachments_ticket_id_fkey"
             columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_merges: {
+        Row: {
+          created_at: string
+          id: string
+          merge_reason: string | null
+          merged_at: string
+          merged_by: string
+          source_ticket_id: string
+          target_ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          merge_reason?: string | null
+          merged_at?: string
+          merged_by: string
+          source_ticket_id: string
+          target_ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          merge_reason?: string | null
+          merged_at?: string
+          merged_by?: string
+          source_ticket_id?: string
+          target_ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_merges_source_ticket_id_fkey"
+            columns: ["source_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_merges_target_ticket_id_fkey"
+            columns: ["target_ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
             referencedColumns: ["id"]
@@ -696,8 +792,10 @@ export type Database = {
           description: string
           escalation_count: number | null
           id: string
+          is_merged: boolean | null
           kb_suggestions: Json | null
           last_escalation_at: string | null
+          merged_into_ticket_id: string | null
           owner: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes: string | null
@@ -722,8 +820,10 @@ export type Database = {
           description: string
           escalation_count?: number | null
           id?: string
+          is_merged?: boolean | null
           kb_suggestions?: Json | null
           last_escalation_at?: string | null
+          merged_into_ticket_id?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
@@ -748,8 +848,10 @@ export type Database = {
           description?: string
           escalation_count?: number | null
           id?: string
+          is_merged?: boolean | null
           kb_suggestions?: Json | null
           last_escalation_at?: string | null
+          merged_into_ticket_id?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
@@ -774,6 +876,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_merged_into_ticket_id_fkey"
+            columns: ["merged_into_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
           {
@@ -1009,6 +1118,14 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      smart_auto_assign_ticket: {
+        Args: {
+          ticket_id: string
+          category_name: string
+          ticket_description: string
+        }
+        Returns: string
       }
     }
     Enums: {
