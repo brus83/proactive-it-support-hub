@@ -21,7 +21,6 @@ import WorkflowWidget from './WorkflowWidget';
 import TicketClosureDialog from "./TicketClosureDialog";
 import ReminderManager from "./ReminderManager";
 import DocumentManager from "./DocumentManager";
-import { TicketMergeDialog } from "./TicketMergeDialog";
 
 interface TicketDetailDialogProps {
   isOpen: boolean;
@@ -74,11 +73,6 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
     ticketId: '',
     ticketTitle: '',
     contactName: ''
-  });
-  const [mergeDialog, setMergeDialog] = useState({
-    isOpen: false,
-    sourceTicketId: '',
-    sourceTicketTitle: ''
   });
 
   useEffect(() => {
@@ -178,22 +172,6 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
     setClosureDialog(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleMergeTicket = () => {
-    if (!ticket) return;
-    
-    setMergeDialog({
-      isOpen: true,
-      sourceTicketId: ticket.id,
-      sourceTicketTitle: ticket.title
-    });
-  };
-
-  const handleTicketMerged = () => {
-    fetchTicketDetails();
-    onTicketUpdated();
-    setMergeDialog(prev => ({ ...prev, isOpen: false }));
-  };
-
   const handleSuggestionApply = (suggestion: string) => {
     setNewComment(prev => prev + (prev ? '\n\n' : '') + suggestion);
   };
@@ -289,8 +267,8 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
                 <WorkflowWidget ticketId={ticketId} />
 
                 {/* Tabs per Commenti e Documenti */}
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-3">
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="comments" className="flex items-center gap-2">
                       <MessageSquare className="h-4 w-4" />
                       Commenti ({comments.length})
@@ -298,10 +276,6 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
                     <TabsTrigger value="documents" className="flex items-center gap-2">
                       <FolderOpen className="h-4 w-4" />
                       Documenti
-                    </TabsTrigger>
-                    <TabsTrigger value="actions" className="flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Azioni
                     </TabsTrigger>
                   </TabsList>
 
@@ -376,51 +350,6 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
                       mode="ticket"
                     />
                   </TabsContent>
-
-                  <TabsContent value="actions" className="space-y-4">
-                    {/* Azioni Ticket */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Azioni Ticket</CardTitle>
-                        <CardDescription>
-                          Gestisci lo stato e le azioni del ticket
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {ticket?.status !== 'closed' && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(profile?.role === 'admin' || profile?.role === 'technician') && (
-                              <Button
-                                variant="outline"
-                                onClick={handleMergeTicket}
-                                className="w-full"
-                              >
-                                <AlertTriangle className="h-4 w-4 mr-2" />
-                                Unisci con Altro Ticket
-                              </Button>
-                            )}
-                            
-                            {canCloseTicket() && (
-                              <Button
-                                onClick={handleCloseTicket}
-                                className="w-full bg-green-600 hover:bg-green-700"
-                              >
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Chiudi Ticket
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                        
-                        {ticket?.status === 'closed' && (
-                          <div className="text-center py-4 text-muted-foreground">
-                            <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                            <p>Questo ticket è stato chiuso</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
                 </Tabs>
               </div>
 
@@ -465,15 +394,6 @@ const TicketDetailDialog = ({ isOpen, onClose, ticketId, onTicketUpdated }: Tick
         ticketTitle={closureDialog.ticketTitle}
         contactName={closureDialog.contactName}
         onTicketClosed={handleTicketClosed}
-      />
-
-      {/* Dialog per unire ticket */}
-      <TicketMergeDialog
-        isOpen={mergeDialog.isOpen}
-        onClose={() => setMergeDialog(prev => ({ ...prev, isOpen: false }))}
-        sourceTicketId={mergeDialog.sourceTicketId}
-        sourceTicketTitle={mergeDialog.sourceTicketTitle}
-        onTicketMerged={handleTicketMerged}
       />
     </>
   );
