@@ -33,8 +33,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600 mb-4">Accesso Negato</h1>
-            <p className="text-gray-600">Non hai i permessi necessari per accedere a questa pagina.</p>
+            <h1 className="text-2xl font-bold text-destructive mb-4">Accesso Negato</h1>
+            <p className="text-muted-foreground">Non hai i permessi necessari per accedere a questa pagina.</p>
           </div>
         </div>
       );

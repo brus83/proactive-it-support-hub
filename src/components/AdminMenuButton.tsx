@@ -19,6 +19,8 @@ const AdminMenuButton = () => {
         variant="outline" 
         size="lg"
         onClick={() => setIsSidebarOpen(true)}
+        aria-label="Apri pannello di amministrazione"
+        title="Pannello Amministrazione"
       >
         <Settings className="w-4 h-4 mr-2" />
         Amministrazione

@@ -19,6 +19,9 @@ import UsersPage from "./pages/admin/Users";
 import AuditLogsPage from "./pages/admin/AuditLogs";
 import CategoriesPage from "./pages/admin/Categories";
 import DocumentsAdminPage from "./pages/admin/Documents";
+import DepartmentsPage from "./pages/admin/Departments";
+import TeamsPage from "./pages/admin/Teams";
+import RolesPermissionsPage from "./pages/admin/RolesPermissions";
 
 const queryClient = new QueryClient();
 
@@ -79,22 +82,22 @@ const App = () => (
               </ProtectedRoute>
             } />
             
-            {/* Placeholder routes for other admin pages */}
-            <Route path="/admin/roles" element={
-              <ProtectedRoute requiredRole="admin">
-                <div className="p-6"><h1>Gestione Ruoli - In sviluppo</h1></div>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/teams" element={
-              <ProtectedRoute requiredRole="admin">
-                <div className="p-6"><h1>Gestione Team - In sviluppo</h1></div>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/departments" element={
-              <ProtectedRoute requiredRole="admin">
-                <div className="p-6"><h1>Gestione Dipartimenti - In sviluppo</h1></div>
-              </ProtectedRoute>
-            } />
+{/* Admin management pages */}
+<Route path="/admin/roles" element={
+  <ProtectedRoute requiredRole="admin">
+    <RolesPermissionsPage />
+  </ProtectedRoute>
+} />
+<Route path="/admin/teams" element={
+  <ProtectedRoute requiredRole="admin">
+    <TeamsPage />
+  </ProtectedRoute>
+} />
+<Route path="/admin/departments" element={
+  <ProtectedRoute requiredRole="admin">
+    <DepartmentsPage />
+  </ProtectedRoute>
+} />
             <Route path="/admin/interface" element={
               <ProtectedRoute>
                 <div className="p-6"><h1>Personalizzazione Interfaccia - In sviluppo</h1></div>
