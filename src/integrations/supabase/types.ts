@@ -61,6 +61,27 @@ export type Database = {
           },
         ]
       }
+      app_permissions: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          permission_key: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          permission_key: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          permission_key?: string
+        }
+        Relationships: []
+      }
       auto_responses: {
         Row: {
           created_at: string
@@ -236,6 +257,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      departments: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       email_templates: {
         Row: {
@@ -489,6 +534,38 @@ export type Database = {
         }
         Relationships: []
       }
+      role_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          permission_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission_id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "app_permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_interventions: {
         Row: {
           created_at: string
@@ -582,6 +659,134 @@ export type Database = {
         }
         Relationships: []
       }
+      team_members: {
+        Row: {
+          created_at: string
+          id: string
+          team_id: string
+          team_role: Database["public"]["Enums"]["team_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          team_id: string
+          team_role?: Database["public"]["Enums"]["team_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          team_id?: string
+          team_role?: Database["public"]["Enums"]["team_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technician_skills: {
+        Row: {
+          created_at: string
+          id: string
+          skill_level: number | null
+          skill_name: string
+          technician_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          skill_level?: number | null
+          skill_name: string
+          technician_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          skill_level?: number | null
+          skill_name?: string
+          technician_id?: string
+        }
+        Relationships: []
+      }
+      technician_workload: {
+        Row: {
+          current_tickets: number | null
+          id: string
+          is_available: boolean | null
+          max_capacity: number | null
+          technician_id: string
+          updated_at: string
+        }
+        Insert: {
+          current_tickets?: number | null
+          id?: string
+          is_available?: boolean | null
+          max_capacity?: number | null
+          technician_id: string
+          updated_at?: string
+        }
+        Update: {
+          current_tickets?: number | null
+          id?: string
+          is_available?: boolean | null
+          max_capacity?: number | null
+          technician_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ticket_attachments: {
         Row: {
           created_at: string
@@ -632,6 +837,51 @@ export type Database = {
           {
             foreignKeyName: "ticket_attachments_ticket_id_fkey"
             columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_merges: {
+        Row: {
+          created_at: string
+          id: string
+          merge_reason: string | null
+          merged_at: string
+          merged_by: string
+          source_ticket_id: string
+          target_ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          merge_reason?: string | null
+          merged_at?: string
+          merged_by: string
+          source_ticket_id: string
+          target_ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          merge_reason?: string | null
+          merged_at?: string
+          merged_by?: string
+          source_ticket_id?: string
+          target_ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_merges_source_ticket_id_fkey"
+            columns: ["source_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_merges_target_ticket_id_fkey"
+            columns: ["target_ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
             referencedColumns: ["id"]
@@ -696,8 +946,10 @@ export type Database = {
           description: string
           escalation_count: number | null
           id: string
+          is_merged: boolean | null
           kb_suggestions: Json | null
           last_escalation_at: string | null
+          merged_into_ticket_id: string | null
           owner: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes: string | null
@@ -722,8 +974,10 @@ export type Database = {
           description: string
           escalation_count?: number | null
           id?: string
+          is_merged?: boolean | null
           kb_suggestions?: Json | null
           last_escalation_at?: string | null
+          merged_into_ticket_id?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
@@ -748,8 +1002,10 @@ export type Database = {
           description?: string
           escalation_count?: number | null
           id?: string
+          is_merged?: boolean | null
           kb_suggestions?: Json | null
           last_escalation_at?: string | null
+          merged_into_ticket_id?: string | null
           owner?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolution_notes?: string | null
@@ -774,6 +1030,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_merged_into_ticket_id_fkey"
+            columns: ["merged_into_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
           {
@@ -1010,8 +1273,17 @@ export type Database = {
         Args: { "": string }
         Returns: string[]
       }
+      smart_auto_assign_ticket: {
+        Args: {
+          ticket_id: string
+          category_name: string
+          ticket_description: string
+        }
+        Returns: string
+      }
     }
     Enums: {
+      team_role: "owner" | "manager" | "member"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status: "open" | "in_progress" | "resolved" | "closed"
       user_role: "admin" | "technician" | "user"
@@ -1142,6 +1414,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      team_role: ["owner", "manager", "member"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
       user_role: ["admin", "technician", "user"],
